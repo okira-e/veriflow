@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/okira-e/veriflow/internal/cliopts"
+	"github.com/okira-e/veriflow/app/cliopts"
 )
 
 func PrintInColor(color string, text string) {

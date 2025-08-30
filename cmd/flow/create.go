@@ -3,10 +3,10 @@ package flow
 import (
 	"fmt"
 
-	"github.com/okira-e/veriflow/internal"
-	"github.com/okira-e/veriflow/internal/cli"
-	"github.com/okira-e/veriflow/internal/config"
-	"github.com/okira-e/veriflow/internal/utils"
+	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func runCreateCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	flow := internal.NewFlow(flowName)
+	flow := app.NewFlow(flowName)
 
 	if err := cfg.AddFlow(flow); err != nil {
 		return err

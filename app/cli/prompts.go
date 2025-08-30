@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/charmbracelet/huh"
-	"github.com/okira-e/veriflow/internal/utils"
+	"github.com/okira-e/veriflow/app/utils"
 )
 
 var cliTheme = huh.ThemeCatppuccin()
@@ -47,9 +48,63 @@ func PromptForString(promptMsg string, placeHolder string, required bool) (strin
 	}
 
 	err := input.WithTheme(cliTheme).Run()
-
 	if err != nil {
 		return "", err
+	}
+
+	return ret, nil
+}
+
+func PromptForJson(promptMsg string, placeholder string, required bool) (string, error) {
+	var ret string
+
+	input := huh.NewText().
+		Title(promptMsg).
+		Value(&ret).
+		Placeholder(placeholder)
+
+	input.Validate(func(s string) error {
+		return utils.ValidateJson(s, !required)
+	})
+
+	err := input.WithTheme(cliTheme).WithHeight(20).Run()
+	if err != nil {
+		return "", err
+	}
+
+	return ret, nil
+}
+
+func PromptForInt(promptMsg string, placeHolder string, required bool) (int, error) {
+	var ret int
+
+	var inputVal string
+	input := huh.NewInput().
+		Title(promptMsg).
+		Value(&inputVal).
+		Placeholder(placeHolder)
+
+	input.Validate(func(s string) error {
+		if required {
+			err := utils.ValidateEmptyString(s)
+			if err != nil {
+				return err
+			}
+		}
+
+		intVal, err := strconv.Atoi(s)
+		if err != nil {
+			return fmt.Errorf("Value should be a number.\n")
+		}
+
+		ret = intVal
+
+		return nil
+	})
+
+	err := input.WithTheme(cliTheme).Run()
+	if err != nil {
+		return 0, err
 	}
 
 	return ret, nil

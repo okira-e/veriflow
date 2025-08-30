@@ -4,10 +4,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
-	"github.com/okira-e/veriflow/internal/cliopts"
 	"github.com/spf13/cobra"
 )
 
@@ -36,6 +36,7 @@ func init() {
 	// Persistent flags are inherited by ALL subcommands.
 	rootCmd.PersistentFlags().BoolVar(&cliopts.JSON, "json", false, "output machine-readable JSON")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NoColor, "no-color", false, "disable colored output")
+	rootCmd.PersistentFlags().BoolVar(&cliopts.NonInteractive, "non-interactive", false, "disable interactive prompts")
 
 	// Respect NO_COLOR env automatically.
 	cobra.OnInitialize(func() {

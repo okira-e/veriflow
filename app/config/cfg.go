@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/okira-e/veriflow/internal"
+	"github.com/okira-e/veriflow/app"
 )
 
 type Cfg struct {
-	ProjectName string           `json:"projectName"`
-	BaseUrl     string           `json:"baseUrl"`
-	Flows       []*internal.Flow `json:"flows"`
+	ProjectName string      `json:"projectName"`
+	BaseUrl     string      `json:"baseUrl"`
+	Flows       []*app.Flow `json:"flows"`
 	flowsIdx    map[string]int
 }
 
@@ -43,7 +43,7 @@ func NewDefaultConfig(baseUrl string) (Cfg, error) {
 
 // GetFlow returns a pointer to the named flow with a boolean 'ok'
 // if it's found.
-func (cfg *Cfg) GetFlow(name string) (*internal.Flow, bool) {
+func (cfg *Cfg) GetFlow(name string) (*app.Flow, bool) {
 	if i, ok := cfg.flowsIdx[name]; ok {
 		return cfg.Flows[i], true
 	}
@@ -51,7 +51,7 @@ func (cfg *Cfg) GetFlow(name string) (*internal.Flow, bool) {
 	return nil, false
 }
 
-func (cfg *Cfg) AddFlow(flow *internal.Flow) error {
+func (cfg *Cfg) AddFlow(flow *app.Flow) error {
 	if _, ok := cfg.GetFlow(flow.Name); ok {
 		return fmt.Errorf("Flow with name '%s' already exists.", flow.Name)
 	}
@@ -76,6 +76,26 @@ func (cfg *Cfg) RemoveFlow(flowName string) error {
 	for i, flow := range cfg.Flows {
 		if flow.Name == flowName {
 			cfg.Flows = append(cfg.Flows[:i], cfg.Flows[i+1:]...)
+			break
+		}
+	}
+
+	err := saveConfig(*cfg)
+	if err != nil {
+		return fmt.Errorf("Error saving config after creating flow: %w.", err)
+	}
+
+	return nil
+}
+
+func (cfg *Cfg) UpdateFlow(flow *app.Flow) error {
+	if _, ok := cfg.GetFlow(flow.Name); !ok {
+		return fmt.Errorf("Flow with name '%s' doesn't exists.", flow.Name)
+	}
+
+	for i, f := range cfg.Flows {
+		if f.Name == flow.Name {
+			cfg.Flows[i] = flow
 			break
 		}
 	}

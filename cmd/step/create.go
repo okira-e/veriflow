@@ -1,15 +1,16 @@
 package step
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/charmbracelet/huh"
-	"github.com/okira-e/veriflow/internal"
-	"github.com/okira-e/veriflow/internal/cli"
-	"github.com/okira-e/veriflow/internal/config"
-	"github.com/okira-e/veriflow/internal/utils"
+	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,6 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create [name]",
 		Short: "Create a new test step",
-		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreateCmd(cmd, args, flags)
 		},
@@ -43,7 +43,19 @@ func newCreateCmd() *cobra.Command {
 }
 
 func runCreateCmd(cmd *cobra.Command, args []string, flags createCmdFlags) error {
-	stepName := args[0]
+	var stepName string
+
+	if len(args) > 0 {
+		stepName = args[0]
+	}
+
+	if stepName == "" {
+		var err error
+		stepName, err = cli.PromptForString("Step name", "register", true)
+		if err != nil {
+			return err
+		}
+	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -56,30 +68,44 @@ func runCreateCmd(cmd *cobra.Command, args []string, flags createCmdFlags) error
 		os.Exit(2)
 	}
 
-	var step internal.Step
-
-	if err := validateRequiredFlags(&flags, &step); err != nil {
+	if err := promptForRequiredFlags(&flags); err != nil {
 		return fmt.Errorf("Failed to validate required flags.")
 	}
 
-	// buildStepFromFlags(flags, &step)
-
-	// if err := promptForMissingData(data, cfg, flags); err != nil {
-	// 	return nil, err
-	// }
-
-	// Validate the flow provided exists.
-	if _, ok := cfg.GetFlow(flags.flow); !ok {
-		return fmt.Errorf("Flow provided doesn't exist.\n")
+	// Only prompt for optional parameters if --no-interactive is not provided.
+	// Otherwise, assume the bot provided everything it needs and nothing more.
+	if !cliopts.NonInteractive {
+		if err := promptForOptionalFlags(&flags); err != nil {
+			return fmt.Errorf("Failed to validate optional flags.")
+		}
 	}
 
-	fmt.Println("STEP NAME: ", stepName)
-	fmt.Println("METHOD: ", flags.method)
+	// Validate the flow provided exists.
+	flow, ok := cfg.GetFlow(flags.flow)
+	if !ok {
+		utils.ErrorOut("FLOW_DOESNT_EXIST", "Flow provided doesn't exist.\n")
+		os.Exit(2)
+	}
+
+	step, err := buildStepFromFlags(stepName, &flags)
+	if err != nil {
+		return fmt.Errorf("Failed to build step from flags: %s.\n", err)
+	}
+
+	err = flow.AddStep(step)
+	if err != nil {
+		return err
+	}
+
+	err = cfg.UpdateFlow(flow)
+	if err != nil {
+		fmt.Errorf("Failed to update the config: %s.\n", err)
+	}
 
 	return nil
 }
 
-func validateRequiredFlags(flags *createCmdFlags, step *internal.Step) error {
+func promptForRequiredFlags(flags *createCmdFlags) error {
 	if flags.flow == "" {
 		cfg, err := config.LoadConfig()
 		if err != nil {
@@ -87,34 +113,71 @@ func validateRequiredFlags(flags *createCmdFlags, step *internal.Step) error {
 		}
 
 		flowNames := make([]string, len(cfg.Flows))
-		for _, flowPtr := range cfg.Flows {
-			flowNames = append(flowNames, flowPtr.Name)
+		for i, flowPtr := range cfg.Flows {
+			flowNames[i] = flowPtr.Name
 		}
 
 		options := huh.NewOptions(flowNames...)
-		flow, err := cli.PromptForOption("Flow name", options, true)
+		flags.flow, err = cli.PromptForOption("Which flow does this belong to?", options, true)
 		if err != nil {
 			return fmt.Errorf("Failed to prompt for flow name: %s", err)
 		}
-
-		log.Fatalf("FLOW BABY: %s\n", flow)
 	}
 
 	if flags.method == "" {
-		cli.PromptForString("Method", "POST", true)
+		var err error
+		flags.method, err = cli.PromptForString("Method", "POST", true)
+		if err != nil {
+			return fmt.Errorf("Failed to prompt for method: %s", err)
+		}
 	}
 
 	if flags.path == "" {
-
-	}
-
-	if flags.json == "" {
-
+		var err error
+		flags.path, err = cli.PromptForString("Path", "/users/register", true)
+		if err != nil {
+			return fmt.Errorf("Failed to prompt for path: %s", err)
+		}
 	}
 
 	if flags.status == 0 {
-
+		var err error
+		flags.status, err = cli.PromptForInt("Status to expect", "201", true)
+		if err != nil {
+			return fmt.Errorf("Failed to prompt for path: %s", err)
+		}
 	}
 
 	return nil
+}
+
+func promptForOptionalFlags(flags *createCmdFlags) error {
+	if flags.json == "" {
+		var err error
+		flags.json, err = cli.PromptForJson("JSON to send", "", false)
+		if err != nil {
+			return fmt.Errorf("Failed to prompt for json: %s", err)
+		}
+	}
+
+	return nil
+}
+
+func buildStepFromFlags(stepName string, flags *createCmdFlags) (*app.Step, error) {
+
+	var parsedJson map[string]any = nil
+	if flags.json != "" {
+		if err := json.Unmarshal([]byte(flags.json), &parsedJson); err != nil {
+			return nil, fmt.Errorf("Failed to parse the json passed for the request: %s\n", err)
+		}
+	}
+	request := app.NewRequest(flags.method, flags.path, parsedJson)
+
+	expect := app.NewExpect(flags.status)
+
+	exports := app.Exports{}
+
+	step := app.NewStep(stepName, request, expect, exports)
+
+	return step, nil
 }

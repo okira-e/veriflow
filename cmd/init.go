@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/okira-e/veriflow/internal/cli"
-	"github.com/okira-e/veriflow/internal/config"
-	"github.com/okira-e/veriflow/internal/utils"
+	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 

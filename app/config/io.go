@@ -16,15 +16,19 @@ func LoadConfig() (Cfg, error) {
 		return Cfg{}, fmt.Errorf("Failed to read config file as bytes. %s", err)
 	}
 
-	var config Cfg
-	err = json.Unmarshal(configBytes, &config)
+	var cfg Cfg
+	err = json.Unmarshal(configBytes, &cfg)
 	if err != nil {
 		return Cfg{}, fmt.Errorf("Failed to unmarshal config JSON. %s", err)
 	}
 
-	config.buildFlowsIndex()
+	cfg.buildFlowsIndex()
+	
+	for _, flow := range cfg.Flows {
+		flow.BuildStepsIndex()
+	}
 
-	return config, nil
+	return cfg, nil
 }
 
 func saveConfig(config Cfg) error {

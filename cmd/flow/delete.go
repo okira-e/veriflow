@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/charmbracelet/huh"
-	"github.com/okira-e/veriflow/internal/cli"
-	"github.com/okira-e/veriflow/internal/config"
-	"github.com/okira-e/veriflow/internal/utils"
+	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -46,8 +46,8 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 	// Prompt for name if not provided.
 	if flowName == "" {
 		flowNames := make([]string, len(cfg.Flows))
-		for _, flowPtr := range cfg.Flows {
-			flowNames = append(flowNames, flowPtr.Name)
+		for i, flowPtr := range cfg.Flows {
+			flowNames[i] = flowPtr.Name
 		}
 
 		options := huh.NewOptions(flowNames...)

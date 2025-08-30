@@ -1,4 +1,6 @@
-package internal
+package app
+
+import "fmt"
 
 type Flow struct {
 	Name     string  `json:"name"`
@@ -12,7 +14,7 @@ func NewFlow(name string) *Flow {
 		Steps: []*Step{},
 	}
 
-	flow.buildStepsIndex()
+	flow.BuildStepsIndex()
 
 	return &flow
 }
@@ -27,10 +29,22 @@ func (flow *Flow) GetStep(name string) (*Step, bool) {
 	return nil, false
 }
 
-// buildStepsIndex creates an index for quick access to steps by name.
+func (flow *Flow) AddStep(step *Step) error {
+	if _, ok := flow.GetStep(step.Name); ok {
+		return fmt.Errorf("step with name \"%s\" already exists", step.Name)
+	}
+
+	flow.Steps = append(flow.Steps, step)
+
+	flow.BuildStepsIndex()
+
+	return nil
+}
+
+// BuildStepsIndex creates an index for quick access to steps by name.
 // Since the steps are array-based, this index allows O(1) access time
 // instead of O(n) for searching through the array.
-func (flow *Flow) buildStepsIndex() {
+func (flow *Flow) BuildStepsIndex() {
 	flow.stepsIdx = make(map[string]int, len(flow.Steps))
 	for i, f := range flow.Steps {
 		flow.stepsIdx[f.Name] = i
