@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/oops"
 )
 
 type Cfg struct {
@@ -19,19 +20,19 @@ type Cfg struct {
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
 	defaultConfigJson, err := os.ReadFile("assets/configs/default-config.json")
 	if err != nil {
-		return Cfg{}, fmt.Errorf("Failed to read default config file. %s", err)
+		return Cfg{}, oops.Err(oops.FileReadError, "Failed to read default config file", err)
 	}
 
 	var defaultConfig Cfg
 	err = json.Unmarshal(defaultConfigJson, &defaultConfig)
 	if err != nil {
-		return Cfg{}, fmt.Errorf("Failed to unmarshal default config. %s", err)
+		return Cfg{}, oops.Err(oops.ConfigUnmarshalError, "Failed to unmarshal default config", err)
 	}
 
 	// Set the project name
 	cwd, err := os.Getwd()
 	if err != nil {
-		return Cfg{}, fmt.Errorf("Failed to get current working directory. %s", err)
+		return Cfg{}, oops.Err(oops.Internal, "Failed to get current working directory", err)
 	}
 
 	defaultConfig.ProjectName = filepath.Base(cwd)
@@ -53,7 +54,7 @@ func (cfg *Cfg) GetFlow(name string) (*app.Flow, bool) {
 
 func (cfg *Cfg) AddFlow(flow *app.Flow) error {
 	if _, ok := cfg.GetFlow(flow.Name); ok {
-		return fmt.Errorf("Flow with name '%s' already exists.", flow.Name)
+		return oops.Err(oops.FlowAlreadyExists, fmt.Sprintf("Flow with name '%s' already exists", flow.Name), nil)
 	}
 
 	cfg.Flows = append(cfg.Flows, flow)
@@ -62,7 +63,7 @@ func (cfg *Cfg) AddFlow(flow *app.Flow) error {
 
 	err := saveConfig(*cfg)
 	if err != nil {
-		return fmt.Errorf("Error saving config after creating flow: %w.", err)
+		return oops.Err(oops.ConfigFileNotFound, "Error saving config after creating flow", err)
 	}
 
 	return nil
@@ -70,7 +71,7 @@ func (cfg *Cfg) AddFlow(flow *app.Flow) error {
 
 func (cfg *Cfg) RemoveFlow(flowName string) error {
 	if _, ok := cfg.GetFlow(flowName); !ok {
-		return fmt.Errorf("Flow with name '%s' doesn't exists.", flowName)
+		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name '%s' doesn't exist", flowName), nil)
 	}
 
 	for i, flow := range cfg.Flows {
@@ -82,7 +83,7 @@ func (cfg *Cfg) RemoveFlow(flowName string) error {
 
 	err := saveConfig(*cfg)
 	if err != nil {
-		return fmt.Errorf("Error saving config after creating flow: %w.", err)
+		return oops.Err(oops.FlowRemovalError, "Error saving config after removing flow", err)
 	}
 
 	return nil
@@ -90,7 +91,7 @@ func (cfg *Cfg) RemoveFlow(flowName string) error {
 
 func (cfg *Cfg) UpdateFlow(flow *app.Flow) error {
 	if _, ok := cfg.GetFlow(flow.Name); !ok {
-		return fmt.Errorf("Flow with name '%s' doesn't exists.", flow.Name)
+		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name '%s' doesn't exist", flow.Name), nil)
 	}
 
 	for i, f := range cfg.Flows {
@@ -102,7 +103,7 @@ func (cfg *Cfg) UpdateFlow(flow *app.Flow) error {
 
 	err := saveConfig(*cfg)
 	if err != nil {
-		return fmt.Errorf("Error saving config after creating flow: %w.", err)
+		return oops.Err(oops.FlowUpdateError, "Error saving config after updating flow", err)
 	}
 
 	return nil

@@ -2,11 +2,11 @@ package flow
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +22,9 @@ func newDeleteCmd() *cobra.Command {
 		Use:   "delete [name]",
 		Short: "Delete an existing flow",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDeleteCmd(cmd, args, flags)
+			err := runDeleteCmd(cmd, args, flags)
+			utils.HandleCliError(err)
+			return err
 		},
 	}
 
@@ -53,15 +55,13 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 		options := huh.NewOptions(flowNames...)
 		flowName, err = cli.PromptForOption("Flow name", options, true)
 		if err != nil {
-			return fmt.Errorf("Failed to prompt for flow name: %s", err)
+			return err
 		}
 	}
 
 	flow, ok := cfg.GetFlow(flowName)
 	if !ok {
-		msg := fmt.Sprintf("Flow with name \"%s\" doesn't exist.", flowName)
-		utils.ErrorOut("FLOW_NOT_FOUND", msg)
-		os.Exit(2)
+		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name \"%s\" doesn't exist", flowName), nil)
 	}
 
 	confirmed := flags.yes
@@ -73,7 +73,7 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 		)
 		confirmed, err = cli.PromptForBool(msg)
 		if err != nil {
-			fmt.Errorf("Failed to prompt for confirmation: %s.", err)
+			return err
 		}
 	}
 

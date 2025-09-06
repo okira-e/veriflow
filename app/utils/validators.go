@@ -4,24 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	
+	"github.com/okira-e/veriflow/app/oops"
 )
 
 func ValidateUrl(s string) error {
 	if s == "" {
-		return fmt.Errorf("URL cannot be empty")
+		return oops.Err(oops.ValidationError, "URL cannot be empty", nil)
 	}
 
 	parsed, err := url.ParseRequestURI(s)
 	if err != nil {
-		return fmt.Errorf("invalid URL format: %s", err.Error())
+		return oops.Err(oops.ValidationError, fmt.Sprintf("invalid URL format: %s", err.Error()), err)
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("URL must start with http:// or https://")
+		return oops.Err(oops.ValidationError, "URL must start with http:// or https://", nil)
 	}
 
 	if parsed.Host == "" {
-		return fmt.Errorf("URL must contain a valid host")
+		return oops.Err(oops.ValidationError, "URL must contain a valid host", nil)
 	}
 
 	return nil
@@ -29,7 +31,7 @@ func ValidateUrl(s string) error {
 
 func ValidateEmptyString(s string) error {
 	if s == "" {
-		return fmt.Errorf("field cannot be empty")
+		return oops.Err(oops.ValidationError, "field cannot be empty", nil)
 	}
 
 	return nil
@@ -47,7 +49,7 @@ func ValidateJson(s string, allowEmpty bool) error {
 
 	var js json.RawMessage
 	if err := json.Unmarshal([]byte(s), &js); err != nil {
-		return fmt.Errorf("Value is not valid JSON.\n")
+		return oops.Err(oops.JSONParseError, "Value is not valid JSON", err)
 	}
 
 	return nil

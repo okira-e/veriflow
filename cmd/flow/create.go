@@ -14,7 +14,11 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create [name]",
 		Short: "Create a new flow",
-		RunE:  runCreateCmd,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := runCreateCmd(cmd, args)
+			utils.HandleCliError(err)
+			return err
+		},
 	}
 
 	return cmd

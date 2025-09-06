@@ -1,6 +1,10 @@
 package app
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/okira-e/veriflow/app/oops"
+)
 
 type Flow struct {
 	Name     string  `json:"name"`
@@ -31,7 +35,12 @@ func (flow *Flow) GetStep(name string) (*Step, bool) {
 
 func (flow *Flow) AddStep(step *Step) error {
 	if _, ok := flow.GetStep(step.Name); ok {
-		return fmt.Errorf("step with name \"%s\" already exists", step.Name)
+		errMsg := fmt.Sprintf("Cannot add step to flow '%s': Step with name '%s' already exists", flow.Name, step.Name)
+		return oops.Err(
+			oops.StepAlreadyExists,
+			errMsg,
+			nil,
+		)
 	}
 
 	flow.Steps = append(flow.Steps, step)

@@ -1,8 +1,7 @@
 package run
 
 import (
-	"fmt"
-
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -21,10 +20,12 @@ func newRootCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "run [OPTIONS] [TARGET...]",
-		Short: "",
+		Short: "Runs the testing engine against the configuration file",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return rootCmd(opts, args)
+			err := rootCmd(opts, args)
+			utils.HandleCliError(err)
+			return err
 		},
 	}
 
@@ -38,7 +39,8 @@ func newRootCmd() *cobra.Command {
 }
 
 func rootCmd(opts *runRootOpts, args []string) error {
-	fmt.Println("ARGS: ", args)
+	// Example of how to return a proper error if needed
+	// return oops.Err(oops.OperationFailed, "Failed to run test", err)
 
 	return nil
 }

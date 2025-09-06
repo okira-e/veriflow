@@ -2,39 +2,49 @@ package cmd
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize the base configuration for Veriflow.",
+	Short: "Initialize the base configuration for Veriflow",
 	Long: `
 	Initialize the base configuration for Veriflow.
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		baseUrl, err := cli.PromptForUrl("What's the base API endpoint?", "http://localhost:8080/api", false)
 		if err != nil {
-			log.Fatalf("Failed to get the base URL. %s", err)
+			utils.HandleCliError(err)
+			return err
 		}
 
 		defaultConfig, err := config.NewDefaultConfig(baseUrl)
 		if err != nil {
-			log.Fatalf("Failed to generate default config. %s", err)
+			utils.HandleCliError(err)
+			return err
 		}
 
-		defaultConfigJson, err := json.MarshalIndent(defaultConfig, "", "    ")
+		defaultConfigJson, jsonErr := json.MarshalIndent(defaultConfig, "", "    ")
+		if jsonErr != nil {
+			appErr := oops.Err(oops.ConfigMarshalError, "Failed to marshal config to JSON", jsonErr)
+			utils.HandleCliError(appErr)
+			return appErr
+		}
 
-		err = os.WriteFile("veriflow.json", defaultConfigJson, 0644)
-		if err != nil {
-			log.Fatalf("Failed to write the default config to file. %s", err)
+		writeErr := os.WriteFile("veriflow.json", defaultConfigJson, 0644)
+		if writeErr != nil {
+			appErr := oops.Err(oops.FileWriteError, "Failed to write the default config to file", writeErr)
+			utils.HandleCliError(appErr)
+			return appErr
 		}
 
 		utils.PrintInColor("green", "Default config file created successfully at veriflow.json")
+		return nil
 	},
 }

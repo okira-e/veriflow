@@ -5,10 +5,34 @@ import (
 	"strconv"
 
 	"github.com/charmbracelet/huh"
+	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
 )
 
 var cliTheme = huh.ThemeCatppuccin()
+
+// Adapter functions to convert our oops.AppError validators to standard error validators
+// that the huh library expects
+func validateUrlAdapter(s string) error {
+	if err := utils.ValidateUrl(s); err != nil {
+		return fmt.Errorf(err.Error())
+	}
+	return nil
+}
+
+func validateEmptyStringAdapter(s string) error {
+	if err := utils.ValidateEmptyString(s); err != nil {
+		return fmt.Errorf(err.Error())
+	}
+	return nil
+}
+
+func validateJsonAdapter(s string, allowEmpty bool) error {
+	if err := utils.ValidateJson(s, allowEmpty); err != nil {
+		return fmt.Errorf(err.Error())
+	}
+	return nil
+}
 
 func PromptForUrl(promptMsg string, placeHolder string, withTrailingSlash bool) (string, error) {
 	var ret string
@@ -16,12 +40,17 @@ func PromptForUrl(promptMsg string, placeHolder string, withTrailingSlash bool) 
 		Title(promptMsg).
 		Value(&ret).
 		Placeholder(placeHolder).
-		Validate(utils.ValidateUrl).
+		Validate(validateUrlAdapter).
 		WithTheme(cliTheme).
 		Run()
 
 	if err != nil {
-		return "", err
+		switch {
+		case isAborted(err):
+			return "", oops.Err(oops.UserAborted, "user aborted URL prompt", err)
+		default:
+			return "", oops.Err(oops.PromptError, "URL prompt failed", err)
+		}
 	}
 
 	if withTrailingSlash && len(ret) > 0 && ret[len(ret)-1] != '/' {
@@ -44,12 +73,17 @@ func PromptForString(promptMsg string, placeHolder string, required bool) (strin
 		Placeholder(placeHolder)
 
 	if required {
-		input.Validate(utils.ValidateEmptyString)
+		input.Validate(validateEmptyStringAdapter)
 	}
 
 	err := input.WithTheme(cliTheme).Run()
 	if err != nil {
-		return "", err
+		switch {
+		case isAborted(err):
+			return "", oops.Err(oops.UserAborted, "user aborted string prompt", err)
+		default:
+			return "", oops.Err(oops.PromptError, "string prompt failed", err)
+		}
 	}
 
 	return ret, nil
@@ -64,12 +98,17 @@ func PromptForJson(promptMsg string, placeholder string, required bool) (string,
 		Placeholder(placeholder)
 
 	input.Validate(func(s string) error {
-		return utils.ValidateJson(s, !required)
+		return validateJsonAdapter(s, !required)
 	})
 
 	err := input.WithTheme(cliTheme).WithHeight(20).Run()
 	if err != nil {
-		return "", err
+		switch {
+		case isAborted(err):
+			return "", oops.Err(oops.UserAborted, "user aborted JSON prompt", err)
+		default:
+			return "", oops.Err(oops.PromptError, "JSON prompt failed", err)
+		}
 	}
 
 	return ret, nil
@@ -94,7 +133,8 @@ func PromptForInt(promptMsg string, placeHolder string, required bool) (int, err
 
 		intVal, err := strconv.Atoi(s)
 		if err != nil {
-			return fmt.Errorf("Value should be a number.\n")
+			// Convert to standard error for huh validation
+			return fmt.Errorf("Value should be a number: %s", err.Error())
 		}
 
 		ret = intVal
@@ -104,7 +144,12 @@ func PromptForInt(promptMsg string, placeHolder string, required bool) (int, err
 
 	err := input.WithTheme(cliTheme).Run()
 	if err != nil {
-		return 0, err
+		switch {
+		case isAborted(err):
+			return 0, oops.Err(oops.UserAborted, "user aborted integer prompt", err)
+		default:
+			return 0, oops.Err(oops.PromptError, "integer prompt failed", err)
+		}
 	}
 
 	return ret, nil
@@ -119,7 +164,12 @@ func PromptForBool(promptMsg string) (bool, error) {
 
 	err := confirmInput.WithTheme(cliTheme).Run()
 	if err != nil {
-		return false, err
+		switch {
+		case isAborted(err):
+			return false, oops.Err(oops.UserAborted, "user aborted confirmation prompt", err)
+		default:
+			return false, oops.Err(oops.PromptError, "confirmation prompt failed", err)
+		}
 	}
 
 	return ret, nil
@@ -142,7 +192,7 @@ func PromptForOptions[T comparable](promptMsg string, options []huh.Option[T], m
 		Value(&ret).
 		Validate(func(values []T) error {
 			if len(values) < min {
-				return fmt.Errorf("please select at least %d options", min)
+				return oops.Err(oops.ValidationError, fmt.Sprintf("please select at least %d options", min), nil)
 			}
 
 			return nil
@@ -151,7 +201,12 @@ func PromptForOptions[T comparable](promptMsg string, options []huh.Option[T], m
 		Run()
 
 	if err != nil {
-		return nil, err
+		switch {
+		case isAborted(err):
+			return nil, oops.Err(oops.UserAborted, "user aborted multi-select prompt", err)
+		default:
+			return nil, oops.Err(oops.PromptError, "multi-select prompt failed", err)
+		}
 	}
 
 	return ret, nil
@@ -166,19 +221,26 @@ func PromptForOption[T comparable](promptMsg string, options []huh.Option[T], re
 
 	if required {
 		input.Validate(func(val T) error {
-			var defaultVal T
+			var zero T
 
-			if val == defaultVal {
-				return fmt.Errorf("selection is required")
+			if val == zero {
+				return oops.Err(oops.ValidationError, "selection is required", nil)
 			}
 
 			return nil
 		})
 	}
-	err := input.WithTheme(cliTheme).Run()
 
-	if err != nil {
-		return ret, err
+	if err := input.WithTheme(cliTheme).Run(); err != nil {
+		var zero T
+
+		switch {
+		case isAborted(err):
+			return zero, oops.Err(oops.UserAborted, "user aborted option prompt", err)
+		default:
+			// library/runtime prompt failure or our validation error
+			return zero, oops.Err(oops.PromptError, "option prompt failed", err)
+		}
 	}
 
 	return ret, nil
