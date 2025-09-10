@@ -5,15 +5,15 @@ import "github.com/okira-e/veriflow/app/opt"
 type Step struct {
 	Name    string  `json:"name"`
 	Request Request `json:"request"`
-	Expect  Expect  `json:"expect"`
+	Assert  Assert  `json:"assert"`
 	Exports Exports `json:"exports"`
 }
 
-func NewStep(name string, request Request, expect Expect, exports Exports) *Step {
+func NewStep(name string, request Request, assert Assert, exports Exports) *Step {
 	return &Step{
 		Name:    name,
 		Request: request,
-		Expect:  expect,
+		Assert:  assert,
 		Exports: exports,
 	}
 }
@@ -41,28 +41,34 @@ func NewRequest(
 	}
 }
 
-type Expect struct {
-	Status int                        `json:"status"`
-	All    opt.Option[[]ExpectResult] `json:"all"`
+type Assert struct {
+	Status int                     `json:"status"`
+	All    opt.Option[[]Assertion] `json:"all"`
 }
 
-func NewExpect(status int) Expect {
-	return Expect{
+func NewAssert(status int, all opt.Option[[]Assertion]) Assert {
+	return Assert{
 		Status: status,
-		// All:    all,
+		All:    all,
 	}
 }
 
-type ExpectResult struct {
-	JsonPath opt.Option[string] `json:"jsonpath"`
-	Exists   bool               `json:"exists"`
-	Secret   bool               `json:"secret"`
+type Assertion struct {
+	JsonPath string `json:"jsonpath"`
+	Value    string `json:"value"`
+	Exists   bool   `json:"exists"`
+	Contains bool   `json:"contains"`
+	Equals   bool   `json:"equals"`
+	Secret   bool   `json:"secret"`
 }
 
-func NewExpectResult(jsonPath opt.Option[string], exists bool, secret bool) ExpectResult {
-	return ExpectResult{
+func NewAssertion(jsonPath string, exists bool, contains bool, equals bool, secret bool, value string) Assertion {
+	return Assertion{
 		JsonPath: jsonPath,
+		Value:    value,
 		Exists:   exists,
+		Contains: contains,
+		Equals:   equals,
 		Secret:   secret,
 	}
 }

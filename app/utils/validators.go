@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	
+
+	"github.com/go-playground/validator/v10"
 	"github.com/okira-e/veriflow/app/oops"
 )
 
@@ -52,5 +53,33 @@ func ValidateJson(s string, allowEmpty bool) error {
 		return oops.Err(oops.JSONParseError, "Value is not valid JSON", err)
 	}
 
+	return nil
+}
+
+var validate = validator.New()
+
+// ValidateStruct validates a struct using the validator package
+func ValidateStruct(s any) error {
+	if err := validate.Struct(s); err != nil {
+		return oops.Err(
+			oops.ValidationError,
+			"failed to validate struct",
+			err,
+		)
+	}
+	
+	return nil
+}
+
+// ValidateVar validates a single variable using the validator package
+func ValidateVar(field any, tag string) error {
+	if err := validate.Var(field, tag); err != nil {
+		return oops.Err(
+			oops.ValidationError,
+			"failed to validate variable",
+			err,
+		)
+	}
+	
 	return nil
 }

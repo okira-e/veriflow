@@ -4,6 +4,7 @@ type Code int
 
 const (
 	OK Code = iota
+	Internal
 	FlowDoesntExist
 	EmptyFlows
 	StepAlreadyExists
@@ -12,7 +13,7 @@ const (
 	OperationFailed
 	ConfigFileNotFound
 	ErrInvalidInput
-	Internal
+	MissingRequiredFlag
 	// File operation errors
 	FileReadError
 	FileWriteError
@@ -43,6 +44,8 @@ func (code Code) String() string {
 	switch code {
 	case OK:
 		return "OK"
+	case Internal:
+		return "INTERNAL"
 	case FlowDoesntExist:
 		return "FLOW_DOESNT_EXIST"
 	case EmptyFlows:
@@ -59,8 +62,8 @@ func (code Code) String() string {
 		return "CONFIG_FILE_NOT_FOUND"
 	case ErrInvalidInput:
 		return "ERR_INVALID_INPUT"
-	case Internal:
-		return "INTERNAL"
+	case MissingRequiredFlag:
+		return "MISSING_REQUIRED_FLAG"
 	case FileReadError:
 		return "FILE_READ_ERROR"
 	case FileWriteError:
@@ -100,9 +103,9 @@ func (code Code) String() string {
 
 func (code Code) IsUserError() bool {
 	switch code {
-	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput, 
-		ValidationError, FlowAlreadyExists, ConfigFileNotFound, JSONParseError, 
-		FileNotFound, FlowRemovalError:
+	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
+		ValidationError, FlowAlreadyExists, ConfigFileNotFound, JSONParseError,
+		FileNotFound, FlowRemovalError, MissingRequiredFlag:
 		return true
 	}
 
