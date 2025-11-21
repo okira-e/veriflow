@@ -1,6 +1,9 @@
 package run
 
 import (
+	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/engine"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
@@ -9,38 +12,56 @@ func SetupRunCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(newRootCmd())
 }
 
-type runRootOpts struct {
-	Parallel    bool
-	Concurrency int
-	DryRun      bool
+type runRootFlags struct {
+	Parallel        bool
+	Concurrency     int
+	DryRun          bool
+	BaseUrlOverride string
 }
 
 func newRootCmd() *cobra.Command {
-	opts := &runRootOpts{}
+	rootFlags := &runRootFlags{}
 
 	cmd := &cobra.Command{
 		Use:   "run [OPTIONS] [TARGET...]",
 		Short: "Runs the testing engine against the configuration file",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := rootCmd(opts, args)
-			utils.HandleCliError(err)
+			err := rootCmd(rootFlags, args)
+			utils.HandleCliError(err, cliopts.Verbose)
 			return err
 		},
 	}
 
 	flags := cmd.Flags()
 
-	flags.BoolVar(&opts.Parallel, "parallel", false, "Run all flows and their steps.")
-	flags.IntVar(&opts.Concurrency, "concurrency", 1, "Number of concurrent flows to run.")
-	flags.BoolVar(&opts.DryRun, "dry-run", false, "Validate and print all steps without executing.")
+	flags.BoolVar(&rootFlags.Parallel, "parallel", false, "Run all flows and their steps")
+	flags.IntVar(&rootFlags.Concurrency, "concurrency", 1, "Number of concurrent flows to run")
+	flags.BoolVar(&rootFlags.DryRun, "dry-run", false, "Validate and print all steps without executing")
+	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
 
 	return cmd
 }
 
-func rootCmd(opts *runRootOpts, args []string) error {
-	// Example of how to return a proper error if needed
-	// return oops.Err(oops.OperationFailed, "Failed to run test", err)
+func rootCmd(rootFlags *runRootFlags, args []string) error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	runnerConfig := engine.RunnerSettings{
+		Cfg:             cfg,
+		RunInParallel:   rootFlags.Parallel,
+		MaxConcurrent:   rootFlags.Concurrency,
+		DryRun:          rootFlags.DryRun,
+		BaseUrlOverride: rootFlags.BaseUrlOverride,
+	}
+
+	runner := engine.NewRunner(runnerConfig)
+	err = runner.Execute()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

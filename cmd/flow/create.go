@@ -5,6 +5,7 @@ import (
 
 	"github.com/okira-e/veriflow/app"
 	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
@@ -16,7 +17,7 @@ func newCreateCmd() *cobra.Command {
 		Short: "Create a new flow",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runCreateCmd(cmd, args)
-			utils.HandleCliError(err)
+			utils.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 

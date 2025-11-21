@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// AppError is an app defined and processed error object
 type AppError struct {
 	Code Code   `json:"code"` // programmatic category
 	Msg  string `json:"msg"`  // safe, user-presentable summary

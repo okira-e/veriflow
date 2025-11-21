@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/oops"
 )
 
-var (
-	filename = "veriflow.json"
-)
-
 func LoadConfig() (*Cfg, error) {
-	configBytes, err := readConfigBytes()
+	configBytes, err := readConfigBytes(cliopts.ConfigFile)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +36,7 @@ func saveConfig(config Cfg) error {
 		return oops.Err(oops.ConfigMarshalError, "Failed to marshal config to JSON", err)
 	}
 
-	err = os.WriteFile(filename, configJson, 0644)
+	err = os.WriteFile(cliopts.ConfigFile, configJson, 0644)
 	if err != nil {
 		return oops.Err(oops.FileWriteError, "Failed to write config to file", err)
 	}
@@ -47,20 +44,20 @@ func saveConfig(config Cfg) error {
 	return nil
 }
 
-func readConfigBytes() ([]byte, error) {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
+func readConfigBytes(configPath string) ([]byte, error) {
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, oops.Err(
 			oops.ConfigFileNotFound,
-			fmt.Sprintf("Config file %s does not exist. Please run 'veriflow init' to generate it.", filename),
+			fmt.Sprintf("Config file does not exist. Please run 'veriflow init' to generate it."),
 			err,
 		)
 	}
 
-	data, err := os.ReadFile(filename)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, oops.Err(
 			oops.FileReadError,
-			fmt.Sprintf("could not read %s", filename),
+			fmt.Sprintf("could not read %s", configPath),
 			err,
 		)
 	}

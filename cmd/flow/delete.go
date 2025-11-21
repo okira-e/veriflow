@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/okira-e/veriflow/app/cli"
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
@@ -23,7 +24,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete an existing flow",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runDeleteCmd(cmd, args, flags)
-			utils.HandleCliError(err)
+			utils.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 

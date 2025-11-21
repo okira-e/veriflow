@@ -1,22 +1,23 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
-	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:           "veriflow",
-	Short:         "Veriflow is a CLI tool to define and run end-to-end API test flows using a simple JSON config.",
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	Long: ``,
+	Use:              "veriflow",
+	Short:            "Veriflow is a CLI tool to define and run end-to-end API test flows using a simple JSON config.",
+	SilenceUsage:     true,
+	SilenceErrors:    true,
+	Long:             ``,
 	TraverseChildren: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
@@ -25,6 +26,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// Persistent flags are inherited by ALL subcommands.
+	rootCmd.PersistentFlags().StringVar(&cliopts.ConfigFile, "config", "veriflow.json", "specify a config file")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.JSONOutput, "json-output", false, "output machine-readable JSON")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NoColor, "no-color", false, "disable colored output")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NonInteractive, "non-interactive", false, "disable interactive prompts")
@@ -48,6 +50,7 @@ func Execute() {
 	run.SetupRunCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		utils.HandleCliError(err)
+		fmt.Printf("ERR: %+v\n", err)
+		utils.HandleCliError(err, cliopts.Verbose)
 	}
 }

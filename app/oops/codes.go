@@ -19,9 +19,21 @@ const (
 	FileWriteError
 	FileNotFound
 	// Flow operation errors
+	FlowExecutionFailed
 	FlowAlreadyExists
 	FlowRemovalError
 	FlowUpdateError
+	// Step operation errors
+	StepExecutionFailed
+	StepRequestFailed
+	StepRequestNotFound
+	StepRequestBuildFailed
+	StepRequestProcessingFailed
+	StepResponseReadFailed
+	StepRequestStatusMismatch
+	StepResponseEmpty
+	StepRequestDeadlineExceeded
+	StepRequestAssertionFailed
 	// Config errors
 	ConfigCreationError
 	ConfigMarshalError
@@ -70,12 +82,34 @@ func (code Code) String() string {
 		return "FILE_WRITE_ERROR"
 	case FileNotFound:
 		return "FILE_NOT_FOUND"
+	case FlowExecutionFailed:
+		return "FLOW_EXECUTION_FAILED"
 	case FlowAlreadyExists:
 		return "FLOW_ALREADY_EXISTS"
 	case FlowRemovalError:
 		return "FLOW_REMOVAL_ERROR"
 	case FlowUpdateError:
 		return "FLOW_UPDATE_ERROR"
+	case StepExecutionFailed:
+		return "STEP_EXECUTION_FAILED"
+	case StepRequestFailed:
+		return "STEP_REQUEST_FAILED"
+	case StepRequestNotFound:
+		return "STEP_REQUEST_NOT_FOUND"
+	case StepRequestBuildFailed:
+		return "STEP_REQUEST_BUILD_FAILED"
+	case StepRequestProcessingFailed:
+		return "STEP_REQUEST_PROCESSING_FAILED"
+	case StepResponseReadFailed:
+		return "STEP_REQUEST_READ_FAILED"
+	case StepRequestStatusMismatch:
+		return "STEP_REQUEST_STATUS_MISMATCH"
+	case StepResponseEmpty:
+		return "STEP_REQUEST_EMPTY"
+	case StepRequestDeadlineExceeded:
+		return "STEP_REQUEST_DEADLINE_EXCEEDED"
+	case StepRequestAssertionFailed:
+		return "STEP_REQUEST_ASSERTION_FAILED"
 	case ConfigCreationError:
 		return "CONFIG_CREATION_ERROR"
 	case ConfigMarshalError:
@@ -105,7 +139,7 @@ func (code Code) IsUserError() bool {
 	switch code {
 	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
 		ValidationError, FlowAlreadyExists, ConfigFileNotFound, JSONParseError,
-		FileNotFound, FlowRemovalError, MissingRequiredFlag:
+		FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestNotFound, StepRequestBuildFailed, StepRequestProcessingFailed, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag:
 		return true
 	}
 

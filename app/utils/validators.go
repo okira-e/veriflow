@@ -67,7 +67,7 @@ func ValidateStruct(s any) error {
 			err,
 		)
 	}
-	
+
 	return nil
 }
 
@@ -80,6 +80,6 @@ func ValidateVar(field any, tag string) error {
 			err,
 		)
 	}
-	
+
 	return nil
 }

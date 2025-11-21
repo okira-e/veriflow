@@ -34,7 +34,7 @@ func newCreateCmd() *cobra.Command {
 		Short: "Create a new test step",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runCreateCmd(cmd, args, flags)
-			utils.HandleCliError(err)
+			utils.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 

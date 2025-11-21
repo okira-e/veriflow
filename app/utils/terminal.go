@@ -36,15 +36,20 @@ func IsColorEnabled() bool {
 	return term != "" && term != "dumb"
 }
 
-// HandleCliError will always exit the program (appropriately) based on
+// HandleCliError will log and exit the program appropriately based on
 // the error. It will skip if the error is nil.
-func HandleCliError(err error) {
+// It takes a verbose flag for logging the entire error chain or just the root cause.
+func HandleCliError(err error, verbose bool) {
 	if err == nil {
 		return
 	}
 
 	var appErr *oops.AppError
 	isAppErr := errors.As(err, &appErr)
+
+	if !verbose {
+		appErr = appErr.RootCause().(*oops.AppError)
+	}
 
 	// Check if the error is a user one based on the root cause at
 	// the bottom of the chain.

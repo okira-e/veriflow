@@ -1,40 +1,18 @@
-# ---- config ----
-BIN       		:= veriflow
-PKG       		:= ./main.go
-VERSION   		:= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-GOOS      		?= $(shell go env GOOS)
-GOARCH    		?= $(shell go env GOARCH)
-OUT       		:= bin/$(BIN)-$(GOOS)-$(GOARCH)-debug
-RELEASE_OUT     := bin/$(BIN)-$(GOOS)-$(GOARCH)
-LDFLAGS   		:= -s -w
-VERSION_FLAGS	:= -X main.version=$(VERSION)
-GOFLAGS   		:= -trimpath
+APP := veriflow
 
-.DEFAULT_GOAL 	:= build
-.PHONY: build run test fmt clean help
-
-# ---- tasks ----
 build:
-	@mkdir -p bin
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "$(VERSION_FLAGS)" -o $(OUT) $(PKG)
-	@echo "built $(OUT)"
+	go build -o bin/$(APP) .
 
 release:
-	@mkdir -p bin
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -ldflags "$(LDFLAGS) $(VERSION_FLAGS)" -o $(RELEASE_OUT) $(PKG)
-	@echo "built $(RELEASE_OUT)"
+	GOOS=$(GOOS) GOARCH=$(GOARCH) \
+	go build -ldflags="-s -w" -trimpath -o bin/$(APP) .
 
-run: build
-	@$(OUT) $(ARGS)
 
 test:
-	go test ./...
+	go test -tags e2e ./tests/e2e/...
 
 fmt:
 	go fmt ./...
 
 clean:
 	rm -rf bin
-
-help:
-	@echo "make [build|run ARGS='... '|test|fmt|clean]"
