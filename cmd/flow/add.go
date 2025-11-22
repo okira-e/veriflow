@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newCreateCmd() *cobra.Command {
+func newAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "create [name]",
-		Short: "Create a new flow",
+		Use:   "add [name]",
+		Short: "Add a new flow",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := runCreateCmd(cmd, args)
+			err := runAddCmd(cmd, args)
 			utils.HandleCliError(err, cliopts.Verbose)
 		},
 	}
@@ -24,7 +24,7 @@ func newCreateCmd() *cobra.Command {
 	return cmd
 }
 
-func runCreateCmd(cmd *cobra.Command, args []string) error {
+func runAddCmd(cmd *cobra.Command, args []string) error {
 	var flowName string
 
 	if len(args) > 0 {
@@ -51,7 +51,7 @@ func runCreateCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	msg := fmt.Sprintf("Flow \"%s\" has been added to veriflow.json", flowName)
-	utils.PrintInColor("green", msg)
+	utils.PrintInColor("green", msg, true)
 
 	return nil
 }

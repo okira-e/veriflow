@@ -1,6 +1,8 @@
 package run
 
 import (
+	"errors"
+
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
@@ -29,7 +31,8 @@ func newRootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := rootCmd(rootFlags, args)
 			utils.HandleCliError(err, cliopts.Verbose)
-			return err
+
+			return nil
 		},
 	}
 
@@ -60,8 +63,17 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 	runner := engine.NewRunner(runnerConfig)
 	err = runner.Execute()
 	if err != nil {
-		return err
+		// Report the error through the engine if it's an execution error ie an assertion
+		// failure.
+		var execErr *engine.ExecutionError
+		if errors.As(err, &execErr) {
+			runner.ReportFailure(execErr)
+		} else {
+			return err
+		}
 	}
 
+	runner.ReportSuccess()
+	
 	return nil
 }

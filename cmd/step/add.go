@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type createCmdFlags struct {
+type addCmdFlags struct {
 	Flow       string `validate:"required"`
 	Method     string `validate:"required,oneof=GET POST PUT PATCH DELETE OPTIONS HEAD"`
 	Path       string `validate:"required,startswith=/"`
@@ -26,14 +26,14 @@ type createCmdFlags struct {
 	AssertExpr []string
 }
 
-func newCreateCmd() *cobra.Command {
-	var flags createCmdFlags
+func newAddCmd() *cobra.Command {
+	var flags addCmdFlags
 
 	cmd := &cobra.Command{
-		Use:   "create [name]",
-		Short: "Create a new test step",
+		Use:   "add [name]",
+		Short: "Add a new test step",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := runCreateCmd(cmd, args, flags)
+			err := runAddCmd(cmd, args, flags)
 			utils.HandleCliError(err, cliopts.Verbose)
 		},
 	}
@@ -48,7 +48,7 @@ func newCreateCmd() *cobra.Command {
 	return cmd
 }
 
-func runCreateCmd(cmd *cobra.Command, args []string, flags createCmdFlags) error {
+func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 	var stepName string
 
 	if len(args) > 0 {
@@ -70,7 +70,7 @@ func runCreateCmd(cmd *cobra.Command, args []string, flags createCmdFlags) error
 
 	// Make sure there's at least one flow to add a step to.
 	if len(cfg.Flows) == 0 {
-		return oops.Err(oops.EmptyFlows, "you need at least one flow to add a step to. Create a flow with `veriflow flow create [name]`", nil)
+		return oops.Err(oops.EmptyFlows, "you need at least one flow to add a step to. Add a flow with `veriflow flow add [name]`", nil)
 	}
 
 	// Only prompt for optional parameters if --no-interactive is not provided.
@@ -113,7 +113,7 @@ func runCreateCmd(cmd *cobra.Command, args []string, flags createCmdFlags) error
 	return nil
 }
 
-func promptForRequiredFlags(flags *createCmdFlags) error {
+func promptForRequiredFlags(flags *addCmdFlags) error {
 	if flags.Flow == "" {
 		cfg, err := config.LoadConfig()
 		if err != nil {
@@ -159,7 +159,7 @@ func promptForRequiredFlags(flags *createCmdFlags) error {
 	return nil
 }
 
-func promptForOptionalFlags(flags *createCmdFlags) error {
+func promptForOptionalFlags(flags *addCmdFlags) error {
 	var err error
 
 	if flags.Json == "" {
@@ -182,7 +182,7 @@ func promptForOptionalFlags(flags *createCmdFlags) error {
 	return nil
 }
 
-func buildStepFromFlags(stepName string, flags *createCmdFlags) (*app.Step, error) {
+func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) {
 	var parsedJson map[string]any = nil
 	if flags.Json != "" {
 		if err := json.Unmarshal([]byte(flags.Json), &parsedJson); err != nil {

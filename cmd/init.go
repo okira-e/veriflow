@@ -41,6 +41,6 @@ var initCmd = &cobra.Command{
 			utils.HandleCliError(appErr, cliopts.Verbose)
 		}
 
-		utils.PrintInColor("green", "Default config file created successfully at veriflow.json")
+		utils.PrintInColor("green", "Default config file created successfully at veriflow.json", true)
 	},
 }

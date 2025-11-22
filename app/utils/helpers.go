@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"math/big"
 )
 
@@ -17,4 +18,14 @@ func NewId() string {
 		id[i] = alphabet[num.Int64()]
 	}
 	return string(id)
+}
+
+func PrettyJson(s []byte) (string, error) {
+	var v any
+	if err := json.Unmarshal(s, &v); err != nil {
+		return "", err
+	}
+
+	out, _ := json.MarshalIndent(v, "", "  ")
+	return string(out), nil
 }

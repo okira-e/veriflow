@@ -105,6 +105,14 @@ func (self *Cfg) UpdateFlow(flow *app.Flow) error {
 	return nil
 }
 
+func (self *Cfg) GetTotalSteps() int {
+	var totalSteps int
+	for _, flow := range self.Flows {
+		totalSteps += len(flow.Steps)
+	}
+	return totalSteps
+}
+
 // buildFlowsIndex creates an index for quick access to flows by name.
 // Since the flows are array-based, this index allows O(1) access time
 // instead of O(n) for searching through the array.

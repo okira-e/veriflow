@@ -14,7 +14,7 @@ import (
 	"github.com/okira-e/veriflow/app"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
-	"github.com/okira-e/veriflow/utils"
+	"github.com/okira-e/veriflow/app/utils"
 )
 
 var (
@@ -45,6 +45,8 @@ func (self *RunnerSettings) getBaseUrl() string {
 type Runner struct {
 	settings RunnerSettings
 	RunId    string
+	flowsRan int
+	stepsRan int
 }
 
 func NewRunner(settings RunnerSettings) *Runner {
@@ -57,12 +59,18 @@ func NewRunner(settings RunnerSettings) *Runner {
 }
 
 func (self *Runner) Execute() error {
-	flows := self.settings.Cfg.Flows
-
-	for _, flow := range flows {
+	for _, flow := range self.settings.Cfg.Flows {
 		err := self.ExecuteFlow(flow)
+		self.flowsRan += 1
 		if err != nil {
-			return oops.Err(oops.FlowExecutionFailed, fmt.Sprintf("failed to execute flow \"%s\"", flow.Name), err)
+			// Flag the flow that failed if the error is an ExecutionError.
+			var executionErr *ExecutionError
+			if errors.As(err, &executionErr) {
+				executionErr.Flow = flow
+				return executionErr
+			} else {
+				return err
+			}
 		}
 	}
 
@@ -72,14 +80,27 @@ func (self *Runner) Execute() error {
 func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 	for i, step := range flow.Steps {
 		err := self.ExecuteStep(step, i)
+		self.stepsRan += 1
 		if err != nil {
-			return oops.Err(oops.StepExecutionFailed, fmt.Sprintf("failed to execute step \"%s\"", step.Name), err)
+			// Flag the step that failed if the error is an ExecutionError.
+			var executionErr *ExecutionError
+			if errors.As(err, &executionErr) {
+				executionErr.Step = step
+				return executionErr
+			} else {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
+// Executes a step.
+//
+// Returns a Go error on anything unexpected.
+//
+// Returns an ExecutionError on an assertion failure.
 func (self *Runner) ExecuteStep(step *app.Step, i int) error {
 	baseCtx := context.Background()
 	timeout := step.Options.Timeout
@@ -113,6 +134,7 @@ func (self *Runner) ExecuteStep(step *app.Step, i int) error {
 	if err != nil {
 		return oops.Err(oops.Internal, "failed to initialize the request for the step", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request
 
@@ -135,7 +157,10 @@ func (self *Runner) ExecuteStep(step *app.Step, i int) error {
 
 	err = step.Assert.Validate(resp.StatusCode, bodyBytes)
 	if err != nil {
-		return oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err)
+		return &ExecutionError{
+			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
+			Response: bodyBytes,
+		}
 	}
 
 	// bodyStr := string(bodyBytes)
@@ -150,6 +175,36 @@ func (self *Runner) GetMaxConcurrent() int {
 	}
 
 	return self.settings.MaxConcurrent
+}
+
+func (self *Runner) ReportFailure(execErr *ExecutionError) {
+	if execErr == nil {
+		return
+	}
+
+	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
+
+	utils.PrintInColor("grey", "Step: ", false)
+	fmt.Printf("%s/%s", execErr.Flow.Name, execErr.Step.Name)
+	utils.PrintInColor("grey", " FAILED.", true)
+
+	utils.PrintInColor("grey", "Cause: ", false)
+	fmt.Printf("%s\n", execErr.Err.RootCause().Error())
+
+	if len(execErr.Response) != 0 {
+		if pretty, err := utils.PrettyJson(execErr.Response); err == nil {
+			utils.PrintInColor("grey", "Server Response: ", true)
+			fmt.Println(pretty)
+		}
+	}
+
+	fmt.Printf("\n")
+}
+
+func (self *Runner) ReportSuccess() {
+	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
+
+	utils.PrintInColor("green", "All tests ran successfully.", true)
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.

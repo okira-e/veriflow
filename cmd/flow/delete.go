@@ -86,7 +86,7 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 	}
 
 	msg := fmt.Sprintf("Flow \"%s\" has been deleted from veriflow.json", flowName)
-	utils.PrintInColor("green", msg)
+	utils.PrintInColor("green", msg, true)
 
 	return nil
 }

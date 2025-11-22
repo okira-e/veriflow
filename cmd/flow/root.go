@@ -13,6 +13,6 @@ var flowCmd = &cobra.Command{
 func SetupFlowCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(flowCmd)
 
-	flowCmd.AddCommand(newCreateCmd())
+	flowCmd.AddCommand(newAddCmd())
 	flowCmd.AddCommand(newDeleteCmd())
 }

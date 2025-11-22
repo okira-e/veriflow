@@ -48,7 +48,7 @@ func readConfigBytes(configPath string) ([]byte, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, oops.Err(
 			oops.ConfigFileNotFound,
-			fmt.Sprintf("Config file does not exist. Please run 'veriflow init' to generate it."),
+			"Config file does not exist. Please run 'veriflow init' to generate it.",
 			err,
 		)
 	}

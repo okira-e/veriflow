@@ -10,19 +10,24 @@ import (
 	"github.com/okira-e/veriflow/app/oops"
 )
 
-func PrintInColor(color string, text string) {
+func PrintInColor(color string, text string, newLine bool) {
 	colors := map[string]string{
 		"red":    "\033[31m",
 		"green":  "\033[32m",
 		"yellow": "\033[33m",
 		"blue":   "\033[34m",
+		"grey":   "\033[90m",
 		"reset":  "\033[0m",
 	}
 
 	if code, ok := colors[color]; ok {
-		fmt.Println(code + text + colors["reset"])
+		fmt.Print(code + text + colors["reset"])
 	} else {
-		fmt.Println(text) // fallback no color
+		fmt.Print(text) // fallback no color
+	}
+
+	if newLine {
+		fmt.Printf("\n")
 	}
 }
 
@@ -43,6 +48,8 @@ func HandleCliError(err error, verbose bool) {
 	if err == nil {
 		return
 	}
+
+	err = error(err)
 
 	var appErr *oops.AppError
 	isAppErr := errors.As(err, &appErr)

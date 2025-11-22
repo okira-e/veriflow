@@ -32,7 +32,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NonInteractive, "non-interactive", false, "disable interactive prompts")
 	rootCmd.PersistentFlags().BoolVarP(&cliopts.Verbose, "verbose", "v", false, "enable verbose output")
 
-	// Respect NO_COLOR env automatically.
+	// Respect NO_COLOR env
 	cobra.OnInitialize(func() {
 		if os.Getenv("NO_COLOR") != "" {
 			cliopts.NoColor = true

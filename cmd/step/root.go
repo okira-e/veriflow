@@ -13,5 +13,5 @@ var stepCmd = &cobra.Command{
 func SetupStepCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(stepCmd)
 
-	stepCmd.AddCommand(newCreateCmd())
+	stepCmd.AddCommand(newAddCmd())
 }
