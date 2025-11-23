@@ -47,7 +47,7 @@ func newRootCmd() *cobra.Command {
 }
 
 func rootCmd(rootFlags *runRootFlags, args []string) error {
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return err
 	}
@@ -74,6 +74,6 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 	}
 
 	runner.ReportSuccess()
-	
+
 	return nil
 }

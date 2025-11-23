@@ -204,7 +204,7 @@ func (self *Runner) ReportFailure(execErr *ExecutionError) {
 func (self *Runner) ReportSuccess() {
 	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
 
-	utils.PrintInColor("green", "All tests ran successfully.", true)
+	utils.PrintInColor("green", "All tests passed.", true)
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.

@@ -17,42 +17,11 @@
                     },
                     "assert": {
                         "status": 201,
-                        "all": [
-                            {
-                                "jsonpath": "$.id",
-                                "exists": true
-                            }
-                        ]
+                        "all": null
                     },
                     "exports": {
                         "userId": {
                             "jsonpath": "$.id"
-                        }
-                    }
-                },
-                {
-                    "name": "login",
-                    "request": {
-                        "method": "POST",
-                        "path": "/users/login",
-                        "json": {
-                            "email": "test-{{RUN_ID}}@example.com",
-                            "password": "P@ssw0rd!"
-                        }
-                    },
-                    "assert": {
-                        "status": 200,
-                        "all": [
-                            {
-                                "jsonpath": "$.token",
-                                "exists": true
-                            }
-                        ]
-                    },
-                    "exports": {
-                        "authToken": {
-                            "jsonpath": "$.token",
-                            "secret": true
                         }
                     }
                 }

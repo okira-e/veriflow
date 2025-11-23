@@ -39,7 +39,7 @@ func runAddCmd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return err
 	}

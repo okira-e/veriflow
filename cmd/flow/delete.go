@@ -40,7 +40,7 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 		flowName = args[0]
 	}
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return err
 	}

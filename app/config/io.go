@@ -9,8 +9,8 @@ import (
 	"github.com/okira-e/veriflow/app/oops"
 )
 
-func LoadConfig() (*Cfg, error) {
-	configBytes, err := readConfigBytes(cliopts.ConfigFile)
+func LoadConfig(path string) (*Cfg, error) {
+	configBytes, err := readConfigBytes(path)
 	if err != nil {
 		return nil, err
 	}

@@ -63,7 +63,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 		}
 	}
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return oops.Err(oops.Internal, "failed to load config", err)
 	}
@@ -115,7 +115,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 
 func promptForRequiredFlags(flags *addCmdFlags) error {
 	if flags.Flow == "" {
-		cfg, err := config.LoadConfig()
+		cfg, err := config.LoadConfig(cliopts.ConfigFile)
 		if err != nil {
 			return err
 		}

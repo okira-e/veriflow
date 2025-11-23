@@ -12,12 +12,18 @@ import (
 
 func PrintInColor(color string, text string, newLine bool) {
 	colors := map[string]string{
-		"red":    "\033[31m",
-		"green":  "\033[32m",
-		"yellow": "\033[33m",
-		"blue":   "\033[34m",
-		"grey":   "\033[90m",
-		"reset":  "\033[0m",
+		"red":     "\033[31m",
+		"green":   "\033[32m",
+		"yellow":  "\033[33m",
+		"blue":    "\033[34m",
+		"grey":    "\033[90m",
+		"reset":   "\033[0m",
+		"nothing": "",
+	}
+
+	isColorEnabled := IsColorEnabled()
+	if !isColorEnabled {
+		color = "nothing"
 	}
 
 	if code, ok := colors[color]; ok {
