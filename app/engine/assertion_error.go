@@ -5,17 +5,17 @@ import (
 	"github.com/okira-e/veriflow/app/oops"
 )
 
-type ExecutionError struct {
+type AssertionFailure struct {
 	Err      *oops.AppError
 	Response []byte
 	Flow     *app.Flow
 	Step     *app.Step
 }
 
-func (self *ExecutionError) Error() string {
+func (self *AssertionFailure) Error() string {
 	return self.Flow.Name + "/" + self.Step.Name + ": " + self.Err.Error()
 }
 
-func (self *ExecutionError) Unwrap() error {
+func (self *AssertionFailure) Unwrap() error {
 	return self.Err
 }

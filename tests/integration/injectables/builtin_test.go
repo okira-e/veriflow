@@ -1,7 +1,10 @@
 package integration
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/okira-e/veriflow/app/config"
@@ -9,16 +12,35 @@ import (
 	testHelpers "github.com/okira-e/veriflow/tests/integration/helpers"
 )
 
-func TestUserOnboarding(t *testing.T) {
+func TestBuiltinInjectables(t *testing.T) {
 	server := testHelpers.SpinTestServer(map[string]http.HandlerFunc{
 		"/users/register": func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(400)
+				return
+			}
+			defer r.Body.Close()
+
+			var data struct {
+				Email    string `json:"email"`
+				Password string `json:"password"`
+			}
+			json.Unmarshal(body, &data)
+
+			if strings.Contains(data.Email, "{{RUN_ID}}") {
+				w.WriteHeader(http.StatusBadRequest)
+				testHelpers.Log(t, "Found bare {{RUN_ID}} in payload body: %s", data.Email)
+				return
+			}
+
 			w.WriteHeader(http.StatusCreated)
 			w.Write([]byte(`{"id":"u1","token":"t1"}`))
 		},
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/flows/user_onboarding.json")
+	cfg, err := config.LoadConfig("../../../testdata/injectables/builtin.json")
 	if err != nil {
 		t.Fatalf("failed loading config path: %v", err)
 	}

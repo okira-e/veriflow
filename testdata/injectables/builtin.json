@@ -1,5 +1,5 @@
 {
-    "projectName": "Test: User Onboarding",
+    "projectName": "Test: Builtin",
     "baseUrl": "http://localhost:8080",
     "flows": [
         {

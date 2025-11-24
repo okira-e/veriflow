@@ -37,3 +37,8 @@ func RunFlowT(t *testing.T, cfg *config.Cfg, serverURL string) error {
 
 	return r.Execute()
 }
+
+func Log(t *testing.T, msg string, args ...any) {
+	t.Helper()
+	t.Logf(msg, args...)
+}

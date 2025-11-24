@@ -65,7 +65,7 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 	if err != nil {
 		// Report the error through the engine if it's an execution error ie an assertion
 		// failure.
-		var execErr *engine.ExecutionError
+		var execErr *engine.AssertionFailure
 		if errors.As(err, &execErr) {
 			runner.ReportFailure(execErr)
 		} else {

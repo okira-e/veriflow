@@ -64,10 +64,10 @@ func (self *Runner) Execute() error {
 		self.flowsRan += 1
 		if err != nil {
 			// Flag the flow that failed if the error is an ExecutionError.
-			var executionErr *ExecutionError
-			if errors.As(err, &executionErr) {
-				executionErr.Flow = flow
-				return executionErr
+			var execFailure *AssertionFailure
+			if errors.As(err, &execFailure) {
+				execFailure.Flow = flow
+				return execFailure
 			} else {
 				return err
 			}
@@ -83,10 +83,10 @@ func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 		self.stepsRan += 1
 		if err != nil {
 			// Flag the step that failed if the error is an ExecutionError.
-			var executionErr *ExecutionError
-			if errors.As(err, &executionErr) {
-				executionErr.Step = step
-				return executionErr
+			var execFailure *AssertionFailure
+			if errors.As(err, &execFailure) {
+				execFailure.Step = step
+				return execFailure
 			} else {
 				return err
 			}
@@ -157,7 +157,7 @@ func (self *Runner) ExecuteStep(step *app.Step, i int) error {
 
 	err = step.Assert.Validate(resp.StatusCode, bodyBytes)
 	if err != nil {
-		return &ExecutionError{
+		return &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
 			Response: bodyBytes,
 		}
@@ -177,7 +177,7 @@ func (self *Runner) GetMaxConcurrent() int {
 	return self.settings.MaxConcurrent
 }
 
-func (self *Runner) ReportFailure(execErr *ExecutionError) {
+func (self *Runner) ReportFailure(execErr *AssertionFailure) {
 	if execErr == nil {
 		return
 	}
