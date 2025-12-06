@@ -2,11 +2,13 @@ package run
 
 import (
 	"errors"
+	"time"
 
+	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
-	"github.com/okira-e/veriflow/app/utils"
+	. "github.com/okira-e/veriflow/app/opt"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +31,8 @@ func newRootCmd() *cobra.Command {
 		Short: "Runs the testing engine against the configuration file",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := rootCmd(rootFlags, args)
-			utils.HandleCliError(err, cliopts.Verbose)
+			err := rootCmd(rootFlags)
+			cli.HandleCliError(err, cliopts.Verbose)
 
 			return nil
 		},
@@ -46,7 +48,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-func rootCmd(rootFlags *runRootFlags, args []string) error {
+func rootCmd(rootFlags *runRootFlags) error {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return err
@@ -61,19 +63,21 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 	}
 
 	runner := engine.NewRunner(runnerConfig)
+	start := time.Now()
 	err = runner.Execute()
 	if err != nil {
 		// Report the error through the engine if it's an execution error ie an assertion
 		// failure.
 		var execErr *engine.AssertionFailure
 		if errors.As(err, &execErr) {
-			runner.ReportFailure(execErr)
+			runner.ReportFailure(execErr, Some(time.Since(start)))
+			return nil
 		} else {
 			return err
 		}
 	}
 
-	runner.ReportSuccess()
+	runner.ReportSuccess(Some(time.Since(start)))
 
 	return nil
 }

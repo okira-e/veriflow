@@ -1,5 +1,7 @@
 package oops
 
+import . "github.com/okira-e/veriflow/app/utils"
+
 type Code int
 
 const (
@@ -26,14 +28,19 @@ const (
 	// Step operation errors
 	StepExecutionFailed
 	StepRequestFailed
-	StepRequestNotFound
 	StepRequestBuildFailed
 	StepRequestProcessingFailed
 	StepResponseReadFailed
-	StepRequestStatusMismatch
-	StepResponseEmpty
 	StepRequestDeadlineExceeded
 	StepRequestAssertionFailed
+	StepRequestNotFound
+	StepResponseEmpty
+	StepRequestStatusMismatch
+	StepRequestResponseAssertionFailed
+	StepRequestResponseParsingFailure
+	StepRequestResponseKeyNotFound
+	StepRequestResponseKeyForbidden
+	StepRequestResponseValueMismatch
 	// Config errors
 	ConfigCreationError
 	ConfigMarshalError
@@ -53,83 +60,94 @@ const (
 )
 
 func (code Code) String() string {
+	// thanks Go
 	switch code {
 	case OK:
-		return "OK"
+		return PascalToScreamingSnake("OK")
 	case Internal:
-		return "INTERNAL"
+		return PascalToScreamingSnake("Internal")
 	case FlowDoesntExist:
-		return "FLOW_DOESNT_EXIST"
+		return PascalToScreamingSnake("FlowDoesntExist")
 	case EmptyFlows:
-		return "EMPTY_FLOWS"
+		return PascalToScreamingSnake("EmptyFlows")
 	case StepAlreadyExists:
-		return "STEP_ALREADY_EXISTS"
+		return PascalToScreamingSnake("StepAlreadyExists")
 	case PromptError:
-		return "PROMPT_ERROR"
+		return PascalToScreamingSnake("PromptError")
 	case UserAborted:
-		return "USER_ABORTED"
+		return PascalToScreamingSnake("UserAborted")
 	case OperationFailed:
-		return "OPERATION_FAILED"
+		return PascalToScreamingSnake("OperationFailed")
 	case ConfigFileNotFound:
-		return "CONFIG_FILE_NOT_FOUND"
+		return PascalToScreamingSnake("ConfigFileNotFound")
 	case ErrInvalidInput:
-		return "ERR_INVALID_INPUT"
+		return PascalToScreamingSnake("ErrInvalidInput")
 	case MissingRequiredFlag:
-		return "MISSING_REQUIRED_FLAG"
+		return PascalToScreamingSnake("MissingRequiredFlag")
 	case FileReadError:
-		return "FILE_READ_ERROR"
+		return PascalToScreamingSnake("FileReadError")
 	case FileWriteError:
-		return "FILE_WRITE_ERROR"
+		return PascalToScreamingSnake("FileWriteError")
 	case FileNotFound:
-		return "FILE_NOT_FOUND"
+		return PascalToScreamingSnake("FileNotFound")
 	case FlowExecutionFailed:
-		return "FLOW_EXECUTION_FAILED"
+		return PascalToScreamingSnake("FlowExecutionFailed")
 	case FlowAlreadyExists:
-		return "FLOW_ALREADY_EXISTS"
+		return PascalToScreamingSnake("FlowAlreadyExists")
 	case FlowRemovalError:
-		return "FLOW_REMOVAL_ERROR"
+		return PascalToScreamingSnake("FlowRemovalError")
 	case FlowUpdateError:
-		return "FLOW_UPDATE_ERROR"
+		return PascalToScreamingSnake("FlowUpdateError")
 	case StepExecutionFailed:
-		return "STEP_EXECUTION_FAILED"
+		return PascalToScreamingSnake("StepExecutionFailed")
 	case StepRequestFailed:
-		return "STEP_REQUEST_FAILED"
+		return PascalToScreamingSnake("StepRequestFailed")
 	case StepRequestNotFound:
-		return "STEP_REQUEST_NOT_FOUND"
+		return PascalToScreamingSnake("StepRequestNotFound")
 	case StepRequestBuildFailed:
-		return "STEP_REQUEST_BUILD_FAILED"
+		return PascalToScreamingSnake("StepRequestBuildFailed")
 	case StepRequestProcessingFailed:
-		return "STEP_REQUEST_PROCESSING_FAILED"
+		return PascalToScreamingSnake("StepRequestProcessingFailed")
 	case StepResponseReadFailed:
-		return "STEP_REQUEST_READ_FAILED"
+		return PascalToScreamingSnake("StepResponseReadFailed")
 	case StepRequestStatusMismatch:
-		return "STEP_REQUEST_STATUS_MISMATCH"
+		return PascalToScreamingSnake("StepRequestStatusMismatch")
+	case StepRequestResponseAssertionFailed:
+		return PascalToScreamingSnake("StepRequestResponseAssertionFailed")
+	case StepRequestResponseParsingFailure:
+		return PascalToScreamingSnake("StepRequestResponseParsingFailure")
+	case StepRequestResponseKeyNotFound:
+		return PascalToScreamingSnake("StepRequestResponseKeyNotFound")
+	case StepRequestResponseKeyForbidden:
+		return PascalToScreamingSnake("StepRequestResponseKeyForbidden")
+	case StepRequestResponseValueMismatch:
+		return PascalToScreamingSnake("StepRequestResponseValueMismatch")
 	case StepResponseEmpty:
-		return "STEP_REQUEST_EMPTY"
+		return PascalToScreamingSnake("StepResponseEmpty")
 	case StepRequestDeadlineExceeded:
-		return "STEP_REQUEST_DEADLINE_EXCEEDED"
+		return PascalToScreamingSnake("StepRequestDeadlineExceeded")
 	case StepRequestAssertionFailed:
-		return "STEP_REQUEST_ASSERTION_FAILED"
+		return PascalToScreamingSnake("StepRequestAssertionFailed")
 	case ConfigCreationError:
-		return "CONFIG_CREATION_ERROR"
+		return PascalToScreamingSnake("ConfigCreationError")
 	case ConfigMarshalError:
-		return "CONFIG_MARSHAL_ERROR"
+		return PascalToScreamingSnake("ConfigMarshalError")
 	case ConfigUnmarshalError:
-		return "CONFIG_UNMARSHAL_ERROR"
+		return PascalToScreamingSnake("ConfigUnmarshalError")
 	case NetworkError:
-		return "NETWORK_ERROR"
+		return PascalToScreamingSnake("NetworkError")
 	case ConnectionFailed:
-		return "CONNECTION_FAILED"
+		return PascalToScreamingSnake("ConnectionFailed")
 	case TimeoutError:
-		return "TIMEOUT_ERROR"
+		return PascalToScreamingSnake("TimeoutError")
 	case ValidationError:
-		return "VALIDATION_ERROR"
+		return PascalToScreamingSnake("ValidationError")
 	case HTTPError:
-		return "HTTP_ERROR"
+		return PascalToScreamingSnake("HTTPError")
 	case JSONParseError:
-		return "JSON_PARSE_ERROR"
+		return PascalToScreamingSnake("JSONParseError")
 	case AuthenticationError:
-		return "AUTHENTICATION_ERROR"
+		return PascalToScreamingSnake("AuthenticationError")
 	default:
 		return "UNKNOWN"
 	}
@@ -138,7 +156,7 @@ func (code Code) String() string {
 func (code Code) IsUserError() bool {
 	switch code {
 	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
-		ValidationError, FlowAlreadyExists, ConfigFileNotFound, JSONParseError,
+		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError,
 		FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestNotFound, StepRequestBuildFailed, StepRequestProcessingFailed, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag:
 		return true
 	}

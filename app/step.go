@@ -1,12 +1,15 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/okira-e/veriflow/app/oops"
-	"github.com/okira-e/veriflow/app/opt"
+	. "github.com/okira-e/veriflow/app/opt"
+	"github.com/oliveagle/jsonpath"
 )
 
 type Step struct {
@@ -31,15 +34,15 @@ type StepOptions struct {
 }
 
 type Request struct {
-	Method string                     `json:"method"`
-	Path   string                     `json:"path"`
-	Json   opt.Option[map[string]any] `json:"json"`
+	Method string                 `json:"method"`
+	Path   string                 `json:"path"`
+	Json   Option[map[string]any] `json:"json"`
 }
 
 func NewRequest(method string, path string, json map[string]any) Request {
-	var optionalJson = opt.None[map[string]any]()
+	var optionalJson = None[map[string]any]()
 	if json != nil {
-		optionalJson = opt.Some(json)
+		optionalJson = Some(json)
 	}
 
 	return Request{
@@ -50,11 +53,11 @@ func NewRequest(method string, path string, json map[string]any) Request {
 }
 
 type Assert struct {
-	Status int                     `json:"status"`
-	All    opt.Option[[]Assertion] `json:"all"`
+	Status int                 `json:"status"`
+	All    Option[[]Assertion] `json:"all"`
 }
 
-func NewAssert(status int, all opt.Option[[]Assertion]) Assert {
+func NewAssert(status int, all Option[[]Assertion]) Assert {
 	return Assert{
 		Status: status,
 		All:    all,
@@ -63,54 +66,98 @@ func NewAssert(status int, all opt.Option[[]Assertion]) Assert {
 
 func (self *Assert) Validate(statusCode int, body []byte) error {
 	// Validate status
-	if statusCode == http.StatusNotFound {
-		return oops.Err(oops.StepRequestNotFound, "request was not found", nil)
-	}
-
-	if statusCode != self.Status {
-		message := fmt.Sprintf("expected %d but got %d (status code)", self.Status, statusCode)
-		return oops.Err(oops.StepRequestStatusMismatch, message, nil)
+	err := self.validateStatus(statusCode)
+	if err != nil {
+		return err
 	}
 
 	// Validate the response body (if exists)
-
 	if self.All.IsSome() {
-		if len(body) == 0 {
-			return oops.Err(oops.StepResponseEmpty, "step's response body is empty", nil)
+		assertions := self.All.Unwrap()
+
+		for _, assertion := range assertions {
+			err = assertion.Validate(body)
+			if err != nil {
+				return oops.Err(oops.StepRequestResponseAssertionFailed, "validation failed", err)
+			}
 		}
 	}
-	
+
+	return nil
+}
+
+func (self *Assert) validateStatus(status int) error {
+	if status == http.StatusNotFound {
+		return oops.Err(oops.StepRequestNotFound, "request was not found", nil)
+	}
+
+	if status != self.Status {
+		message := fmt.Sprintf("expected %d but got %d (status code)", self.Status, status)
+		return oops.Err(oops.StepRequestStatusMismatch, message, nil)
+	}
 
 	return nil
 }
 
 type Assertion struct {
-	JsonPath string `json:"jsonpath"`
-	Value    string `json:"value"`
-	Exists   bool   `json:"exists"`
-	Contains bool   `json:"contains"`
-	Equals   bool   `json:"equals"`
-	Secret   bool   `json:"secret"`
+	JsonPath string         `json:"jsonpath"`
+	Exists   bool           `json:"exists"`
+	Contains Option[string] `json:"contains"`
+	Equals   Option[string] `json:"equals"`
+	Secret   bool           `json:"secret"`
 }
 
-func NewAssertion(jsonPath string, exists bool, contains bool, equals bool, secret bool, value string) Assertion {
-	return Assertion{
-		JsonPath: jsonPath,
-		Value:    value,
-		Exists:   exists,
-		Contains: contains,
-		Equals:   equals,
-		Secret:   secret,
+func (self *Assertion) Validate(body []byte) error {
+	if len(body) == 0 {
+		return oops.Err(oops.StepResponseEmpty, "step's response body is empty", nil)
 	}
+
+	var response any
+	err := json.Unmarshal(body, &response)
+	if err != nil {
+		return oops.Err(oops.StepRequestResponseParsingFailure, "failed to parse response for step", err)
+	}
+
+	value, err := jsonpath.JsonPathLookup(response, self.JsonPath)
+	if self.Exists && err != nil {
+		message := fmt.Sprintf("jsonpath '%s' not found in response", self.JsonPath)
+		return oops.Err(oops.StepRequestResponseKeyNotFound, message, err)
+	}
+
+	if !self.Exists && err == nil {
+		// It shouldn't exist, yet it does.
+		message := fmt.Sprintf("jsonpath '%s' found in response but it shouldn't exist", self.JsonPath)
+		return oops.Err(oops.StepRequestResponseKeyForbidden, message, nil)
+	}
+
+	if self.Equals.IsSome() {
+		expected := self.Equals.Unwrap()
+		actual := fmt.Sprintf("%v", value)
+		if actual != expected {
+			message := fmt.Sprintf("jsonpath '%s' expected to equal '%s' but got '%s'", self.JsonPath, expected, actual)
+			return oops.Err(oops.StepRequestResponseValueMismatch, message, nil)
+		}
+	}
+
+	if self.Contains.IsSome() {
+		expectedSubstring := self.Contains.Unwrap()
+		actual := fmt.Sprintf("%v", value)
+		if !strings.Contains(actual, expectedSubstring) {
+			message := fmt.Sprintf("jsonpath '%s' expected to contain '%s' but got '%s'", self.JsonPath, expectedSubstring, actual)
+			return oops.Err(oops.StepRequestResponseValueMismatch, message, nil)
+		}
+	}
+
+	return nil
 }
 
 type Exports = map[string]ExportExpression
 
 type ExportExpression struct {
-	JsonPath opt.Option[string] `json:"jsonpath"`
+	JsonPath Option[string] `json:"jsonpath"`
 }
 
-func NewExportExpression(jsonPath opt.Option[string]) ExportExpression {
+func NewExportExpression(jsonPath Option[string]) ExportExpression {
 	return ExportExpression{
 		JsonPath: jsonPath,
 	}

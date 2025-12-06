@@ -6,19 +6,19 @@ import (
 
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
-	testHelpers "github.com/okira-e/veriflow/tests/integration/helpers"
+	"github.com/okira-e/veriflow/tests/integration/helpers"
 )
 
-func TestUserOnboarding(t *testing.T) {
-	server := testHelpers.SpinTestServer(map[string]http.HandlerFunc{
+func TestSmoke(t *testing.T) {
+	server := helpers.SpinTestServer(map[string]http.HandlerFunc{
 		"/users/register": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(`{"id":"u1","token":"t1"}`))
+			w.Write([]byte(`{"id":"123","token":"test number 1"}`))
 		},
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/flows/user_onboarding.json")
+	cfg, err := config.LoadConfig("../../../testdata/flows/smoke.json")
 	if err != nil {
 		t.Fatalf("failed loading config path: %v", err)
 	}
@@ -29,6 +29,7 @@ func TestUserOnboarding(t *testing.T) {
 		Cfg: cfg,
 	})
 
+	// @TODO: Make global args passable for testing
 	err = runner.Execute()
 	if err != nil {
 		t.Fatalf("flow failed: %v", err)

@@ -12,8 +12,7 @@ import (
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
-	"github.com/okira-e/veriflow/app/opt"
-	"github.com/okira-e/veriflow/app/utils"
+	. "github.com/okira-e/veriflow/app/opt"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +33,7 @@ func newAddCmd() *cobra.Command {
 		Short: "Add a new test step",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runAddCmd(cmd, args, flags)
-			utils.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 
@@ -85,7 +84,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 		}
 	}
 
-	if err := utils.ValidateStruct(&flags); err != nil {
+	if err := cli.ValidateStruct(&flags); err != nil {
 		return oops.Err(oops.MissingRequiredFlag, "missing required flags", err)
 	}
 
@@ -113,6 +112,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 	return nil
 }
 
+// promptForRequiredFlags sets the value in the flags object from cli prompting
 func promptForRequiredFlags(flags *addCmdFlags) error {
 	if flags.Flow == "" {
 		cfg, err := config.LoadConfig(cliopts.ConfigFile)
@@ -169,6 +169,7 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 		}
 	}
 
+	// @TODO: Continue prompting optional stuff.
 	// [OKI-36] do this bit for asserting through the CLI.
 	// if flags.AssertExpr == "" {
 	// 	assertExpr, err := cli.PromptForString("Assertion expression\nhi", "", false)
@@ -202,10 +203,10 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 			return nil, err
 		}
 
-		assert = app.NewAssert(flags.Status, opt.Some(all))
+		assert = app.NewAssert(flags.Status, Some(all))
 	} else {
 		// Nothing to assert other than the status of the response.
-		assert = app.NewAssert(flags.Status, opt.None[[]app.Assertion]())
+		assert = app.NewAssert(flags.Status, None[[]app.Assertion]())
 	}
 
 	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
@@ -252,7 +253,14 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 			if err := validateJSONPath(path); err != nil {
 				return nil, fmt.Errorf("assertion #%d: %w", i+1, err)
 			}
-			asserts = append(asserts, app.NewAssertion(path, true, false, false, false, ""))
+			assertion := app.Assertion{
+				JsonPath: path,
+				Exists:   true,
+				Contains: None[string](),
+				Equals:   None[string](),
+				Secret:   false,
+			}
+			asserts = append(asserts, assertion)
 			continue
 		}
 
@@ -271,9 +279,23 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 
 			switch kind {
 			case "equals":
-				asserts = append(asserts, app.NewAssertion(path, false, false, true, false, val))
+				assertion := app.Assertion{
+					JsonPath: path,
+					Exists:   false,
+					Contains: None[string](),
+					Equals:   Some(val),
+					Secret:   false,
+				}
+				asserts = append(asserts, assertion)
 			case "contains":
-				asserts = append(asserts, app.NewAssertion(path, false, true, false, false, val))
+				assertion := app.Assertion{
+					JsonPath: path,
+					Exists:   false,
+					Contains: Some(val),
+					Equals:   None[string](),
+					Secret:   false,
+				}
+				asserts = append(asserts, assertion)
 			default:
 				// Should never happen due to regex, but keep a guard.
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)

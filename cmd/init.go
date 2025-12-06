@@ -21,24 +21,24 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		baseUrl, err := cli.PromptForUrl("What's the base API endpoint?", "http://localhost:8080/api", false)
 		if err != nil {
-			utils.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err, cliopts.Verbose)
 		}
 
 		defaultConfig, err := config.NewDefaultConfig(baseUrl)
 		if err != nil {
-			utils.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err, cliopts.Verbose)
 		}
 
 		defaultConfigJson, jsonErr := json.MarshalIndent(defaultConfig, "", "    ")
 		if jsonErr != nil {
 			appErr := oops.Err(oops.ConfigMarshalError, "Failed to marshal config to JSON", jsonErr)
-			utils.HandleCliError(appErr, cliopts.Verbose)
+			cli.HandleCliError(appErr, cliopts.Verbose)
 		}
 
 		writeErr := os.WriteFile("veriflow.json", defaultConfigJson, 0644)
 		if writeErr != nil {
 			appErr := oops.Err(oops.FileWriteError, "Failed to write the default config to file", writeErr)
-			utils.HandleCliError(appErr, cliopts.Verbose)
+			cli.HandleCliError(appErr, cliopts.Verbose)
 		}
 
 		utils.PrintInColor("green", "Default config file created successfully at veriflow.json", true)

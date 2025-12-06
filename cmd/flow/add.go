@@ -17,7 +17,7 @@ func newAddCmd() *cobra.Command {
 		Short: "Add a new flow",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runAddCmd(cmd, args)
-			utils.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 

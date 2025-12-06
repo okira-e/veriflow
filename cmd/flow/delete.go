@@ -24,7 +24,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete an existing flow",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runDeleteCmd(cmd, args, flags)
-			utils.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 

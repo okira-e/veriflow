@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/okira-e/veriflow/app/oops"
-	"github.com/okira-e/veriflow/app/utils"
 )
 
 var cliTheme = huh.ThemeCatppuccin()
@@ -14,22 +13,22 @@ var cliTheme = huh.ThemeCatppuccin()
 // Adapter functions to convert our oops.AppError validators to standard error validators
 // that the huh library expects
 func validateUrlAdapter(s string) error {
-	if err := utils.ValidateUrl(s); err != nil {
-		return fmt.Errorf(err.Error())
+	if err := ValidateUrl(s); err != nil {
+		return fmt.Errorf("%w", err)
 	}
 	return nil
 }
 
 func validateEmptyStringAdapter(s string) error {
-	if err := utils.ValidateEmptyString(s); err != nil {
-		return fmt.Errorf(err.Error())
+	if err := ValidateEmptyString(s); err != nil {
+		return fmt.Errorf("%w", err)
 	}
 	return nil
 }
 
 func validateJsonAdapter(s string, allowEmpty bool) error {
-	if err := utils.ValidateJson(s, allowEmpty); err != nil {
-		return fmt.Errorf(err.Error())
+	if err := ValidateJson(s, allowEmpty); err != nil {
+		return fmt.Errorf("%w", err)
 	}
 	return nil
 }
@@ -125,7 +124,7 @@ func PromptForInt(promptMsg string, placeHolder string, required bool) (int, err
 
 	input.Validate(func(s string) error {
 		if required {
-			err := utils.ValidateEmptyString(s)
+			err := ValidateEmptyString(s)
 			if err != nil {
 				return err
 			}

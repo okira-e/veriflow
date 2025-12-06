@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
+	. "github.com/okira-e/veriflow/app/opt"
 	"github.com/okira-e/veriflow/app/utils"
 )
 
@@ -83,10 +86,10 @@ func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 		self.stepsRan += 1
 		if err != nil {
 			// Flag the step that failed if the error is an ExecutionError.
-			var execFailure *AssertionFailure
-			if errors.As(err, &execFailure) {
-				execFailure.Step = step
-				return execFailure
+			var assertionFailure *AssertionFailure
+			if errors.As(err, &assertionFailure) {
+				assertionFailure.Step = step
+				return assertionFailure
 			} else {
 				return err
 			}
@@ -163,9 +166,6 @@ func (self *Runner) ExecuteStep(step *app.Step, i int) error {
 		}
 	}
 
-	// bodyStr := string(bodyBytes)
-	// fmt.Println("GOT RESPONSE: ", bodyStr)
-
 	return nil
 }
 
@@ -177,12 +177,22 @@ func (self *Runner) GetMaxConcurrent() int {
 	return self.settings.MaxConcurrent
 }
 
-func (self *Runner) ReportFailure(execErr *AssertionFailure) {
+func (self *Runner) ReportFailure(execErr *AssertionFailure, timeTook Option[time.Duration]) {
 	if execErr == nil {
 		return
 	}
 
-	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
+	if cliopts.JSONOutput {
+		self.reportFailureJSON(execErr, timeTook)
+		return
+	}
+
+	// existing human output
+	if timeTook.IsSome() {
+		fmt.Printf("Took: %s\n\n", utils.FormatDuration(timeTook.Unwrap()))
+	}
+
+	fmt.Printf("Ran %d/%d tests in %s.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
 
 	utils.PrintInColor("grey", "Step: ", false)
 	fmt.Printf("%s/%s", execErr.Flow.Name, execErr.Step.Name)
@@ -199,11 +209,21 @@ func (self *Runner) ReportFailure(execErr *AssertionFailure) {
 	}
 
 	fmt.Printf("\n")
+	utils.PrintInColor("red", "Some tests failed.", true)
 }
 
-func (self *Runner) ReportSuccess() {
-	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
+func (self *Runner) ReportSuccess(timeTook Option[time.Duration]) {
+	if cliopts.JSONOutput {
+		self.reportSuccessJSON(timeTook)
+		return
+	}
 
+	// existing human output
+	if timeTook.IsSome() {
+		fmt.Printf("Took: %s\n\n", utils.FormatDuration(timeTook.Unwrap()))
+	}
+
+	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
 	utils.PrintInColor("green", "All tests passed.", true)
 }
 
@@ -232,6 +252,44 @@ func (self *Runner) processRequestBody(body map[string]any) (map[string]any, err
 	}
 
 	return body, nil
+}
+
+func (self *Runner) reportFailureJSON(execErr *AssertionFailure, timeTook Option[time.Duration]) {
+	took := "N/A"
+	if timeTook.IsSome() {
+		took = utils.FormatDuration(timeTook.Unwrap())
+	}
+	out := map[string]any{
+		"took":   took,
+		"status": "failure",
+		"ran":    self.stepsRan,
+		"total":  self.settings.Cfg.GetTotalSteps(),
+		"flow":   execErr.Flow.Name,
+		"step":   execErr.Step.Name,
+		"error":  execErr.Err.RootCause().Error(),
+		"code":   oops.StepRequestAssertionFailed.String(),
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
+}
+
+func (self *Runner) reportSuccessJSON(timeTook Option[time.Duration]) {
+	took := "N/A"
+	if timeTook.IsSome() {
+		took = utils.FormatDuration(timeTook.Unwrap())
+	}
+	out := map[string]any{
+		"took":   took,
+		"status": "success",
+		"ran":    self.stepsRan,
+		"total":  self.settings.Cfg.GetTotalSteps(),
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
 }
 
 func (self *Runner) resolveInjectedVariables(str string) string {

@@ -9,11 +9,11 @@ import (
 
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
-	testHelpers "github.com/okira-e/veriflow/tests/integration/helpers"
+	"github.com/okira-e/veriflow/tests/integration/helpers"
 )
 
 func TestBuiltinInjectables(t *testing.T) {
-	server := testHelpers.SpinTestServer(map[string]http.HandlerFunc{
+	server := helpers.SpinTestServer(map[string]http.HandlerFunc{
 		"/users/register": func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
@@ -30,7 +30,7 @@ func TestBuiltinInjectables(t *testing.T) {
 
 			if strings.Contains(data.Email, "{{RUN_ID}}") {
 				w.WriteHeader(http.StatusBadRequest)
-				testHelpers.Log(t, "Found bare {{RUN_ID}} in payload body: %s", data.Email)
+				helpers.Log(t, "Found bare {{RUN_ID}} in payload body: %s", data.Email)
 				return
 			}
 

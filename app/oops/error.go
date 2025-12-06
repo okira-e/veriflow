@@ -33,7 +33,7 @@ func (self *AppError) Error() string {
 		errMsg = fmt.Errorf("%s. %w", self.Msg, self.Err)
 	}
 
-	return fmt.Sprintf("[%s] %s", self.Code, errMsg)
+	return fmt.Sprintf("[%s] %s", self.Code.String(), errMsg)
 }
 
 func (self *AppError) Unwrap() error {
@@ -47,7 +47,7 @@ func (self *AppError) Trail() string {
 	current := error(self)
 	for current != nil {
 		if e, ok := current.(*AppError); ok {
-			parts = append(parts, fmt.Sprintf("[%s] %s", e.Code, e.Msg))
+			parts = append(parts, fmt.Sprintf("[%s] %s", e.Code.String(), e.Msg))
 			current = e.Err
 		} else {
 			parts = append(parts, current.Error())
@@ -112,7 +112,10 @@ func (self *AppError) RootCause() error {
 	current := error(self)
 	for {
 		unwrapped := errors.Unwrap(current)
-		if unwrapped == nil {
+		var appErr *AppError
+		isAppErr := errors.As(unwrapped, &appErr)
+
+		if !isAppErr || unwrapped == nil {
 			return current
 		}
 		current = unwrapped

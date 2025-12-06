@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
-	"github.com/okira-e/veriflow/app/utils"
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
@@ -25,6 +24,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	// @TODO: App panics on unknown flags or smth like `veriflow --version`
 	// Persistent flags are inherited by ALL subcommands.
 	rootCmd.PersistentFlags().StringVar(&cliopts.ConfigFile, "config", "veriflow.json", "specify a config file")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.JSONOutput, "json-output", false, "output machine-readable JSON")
@@ -50,7 +50,6 @@ func Execute() {
 	run.SetupRunCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Printf("ERR: %+v\n", err)
-		utils.HandleCliError(err, cliopts.Verbose)
+		cli.HandleCliError(err, cliopts.Verbose)
 	}
 }

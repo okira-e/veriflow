@@ -18,6 +18,7 @@ type Cfg struct {
 	flowsIdx    map[string]int
 }
 
+// @TODO: Add versioning.
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
 	var defaultConfig Cfg
 	err := json.Unmarshal(defaults.DefaultConfig, &defaultConfig)

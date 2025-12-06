@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"math/big"
+	"time"
+	"unicode"
 )
 
 func NewId() string {
@@ -28,4 +30,47 @@ func PrettyJson(s []byte) (string, error) {
 
 	out, _ := json.MarshalIndent(v, "", "  ")
 	return string(out), nil
+}
+
+func PascalToScreamingSnake(s string) string {
+	if s == "" {
+		return ""
+	}
+
+	var out []rune
+	runes := []rune(s)
+
+	for i, r := range runes {
+		if i > 0 {
+			prev := runes[i-1]
+			var next rune
+			if i+1 < len(runes) {
+				next = runes[i+1]
+			}
+
+			// Insert underscore on:
+			// - lower/digit -> upper (FooBar -> FOO_BAR)
+			// - acronym end (JSONData -> JSON_DATA)
+			if (unicode.IsLower(prev) || unicode.IsDigit(prev)) && unicode.IsUpper(r) ||
+				unicode.IsUpper(prev) && unicode.IsUpper(r) && next != 0 && unicode.IsLower(next) {
+				out = append(out, '_')
+			}
+		}
+
+		out = append(out, unicode.ToUpper(r))
+	}
+
+	return string(out)
+}
+
+func FormatDuration(duration time.Duration) string {
+	if duration.Hours() >= 1 {
+		return duration.Truncate(time.Minute).String()
+	}
+
+	if duration.Minutes() >= 1 {
+		return duration.Truncate(time.Second).String()
+	}
+
+	return duration.Truncate(time.Millisecond).String()
 }

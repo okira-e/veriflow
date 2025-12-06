@@ -17,7 +17,22 @@
                     },
                     "assert": {
                         "status": 201,
-                        "all": null
+                        "all": [
+                            {
+                                "jsonpath": "$.id",
+                                "equals": "123",
+                                "exists": true
+                            },
+                            {
+                                "jsonpath": "$.token",
+                                "contains": "test",
+                                "exists": true
+                            },
+                            {
+                                "jsonpath": "$.password",
+                                "exists": false
+                            }
+                        ]
                     },
                     "exports": {
                         "userId": {
