@@ -17,12 +17,12 @@ import (
 )
 
 type addCmdFlags struct {
-	Flow       string `validate:"required"`
-	Method     string `validate:"required,oneof=GET POST PUT PATCH DELETE OPTIONS HEAD"`
-	Path       string `validate:"required,startswith=/"`
-	Json       string
-	Status     int `validate:"required,gt=99,lt=600"`
-	AssertExpr []string
+	Flow              string `validate:"required"`
+	Method            string `validate:"required,oneof=GET POST PUT PATCH DELETE OPTIONS HEAD"`
+	Path              string `validate:"required,startswith=/"`
+	Json              string
+	Status            int `validate:"required,gt=99,lt=600"`
+	AssertExpressions []string
 }
 
 func newAddCmd() *cobra.Command {
@@ -31,6 +31,18 @@ func newAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add [name]",
 		Short: "Add a new test step",
+		Long: `
+Assertions syntax:
+  exists <jsonpath>
+    Example: --assert "exists $.data.token"
+
+  equals <jsonpath> <value>
+    Example: --assert "equals $.user.id 42"
+
+  contains <jsonpath> <value>
+    Example: --assert "contains $.roles admin"
+`,
+
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runAddCmd(cmd, args, flags)
 			cli.HandleCliError(err, cliopts.Verbose)
@@ -42,7 +54,7 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.Path, "path", "", "Request path")
 	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional)")
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
-	cmd.Flags().StringArrayVar(&flags.AssertExpr, "assert", []string{}, "Asserted result body")
+	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
 
 	return cmd
 }
@@ -96,7 +108,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 
 	step, err := buildStepFromFlags(stepName, &flags)
 	if err != nil {
-		return oops.Err(oops.Internal, "failed to build step from flags", err)
+		return err
 	}
 
 	appErr := flow.AddStep(step)
@@ -169,17 +181,87 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 		}
 	}
 
-	// @TODO: Continue prompting optional stuff.
-	// [OKI-36] do this bit for asserting through the CLI.
-	// if flags.AssertExpr == "" {
-	// 	assertExpr, err := cli.PromptForString("Assertion expression\nhi", "", false)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	if len(flags.AssertExpressions) == 0 {
+		if err := promptForAssertions(flags); err != nil {
+			return err
+		}
+	}
 
-	// 	flags.AssertExpr = assertExpr
-	// }
+	return nil
+}
 
+func promptForAssertions(flags *addCmdFlags) error {
+	addAssertions, err := cli.PromptForBool("Add assertions to validate the response body?")
+	if err != nil {
+		return err
+	}
+
+	if !addAssertions {
+		return nil
+	}
+
+	assertions := []string{}
+
+	for {
+		// Prompt for assertion type
+		assertionTypeOptions := huh.NewOptions("exists", "equals", "contains")
+		assertionType, err := cli.PromptForOption("Assertion type (exists/equals/contains)", assertionTypeOptions, true)
+		if err != nil {
+			return err
+		}
+
+		// Prompt for JSONPath
+		jsonPath, err := cli.PromptForString("JSONPath (e.g., $.data.id)", "$.data.id", true)
+		if err != nil {
+			return err
+		}
+
+		// Ensure JSONPath starts with $
+		jsonPath = strings.TrimSpace(jsonPath)
+		if jsonPath != "" && jsonPath[0] != '$' {
+			jsonPath = "$" + jsonPath
+		}
+
+		// Validate JSONPath format
+		if err := validateJSONPath(jsonPath); err != nil {
+			return oops.Err(oops.JSONPathValidationError, fmt.Sprintf("invalid JSONPath %q", jsonPath), err)
+		}
+
+		// Build assertion expression based on type
+		var assertionExpr string
+		switch assertionType {
+		case "exists":
+			assertionExpr = fmt.Sprintf("exists %s", jsonPath)
+		case "equals":
+			value, err := cli.PromptForString(fmt.Sprintf("Expected value for %s", jsonPath), "", true)
+			if err != nil {
+				return err
+			}
+			assertionExpr = fmt.Sprintf("equals %s %s", jsonPath, value)
+		case "contains":
+			value, err := cli.PromptForString(fmt.Sprintf("Substring to check for in %s", jsonPath), "", true)
+			if err != nil {
+				return err
+			}
+			assertionExpr = fmt.Sprintf("contains %s %s", jsonPath, value)
+		default:
+			return oops.Err(oops.ErrInvalidInput, fmt.Sprintf("unknown assertion type: %s", assertionType), nil)
+		}
+
+		assertions = append(assertions, assertionExpr)
+
+		// Ask if they want to add another assertion
+		addMore, err := cli.PromptForBool("Add another assertion?")
+		if err != nil {
+			return err
+		}
+
+		if !addMore {
+			break
+		}
+	}
+
+	flags.AssertExpressions = assertions
 	return nil
 }
 
@@ -196,11 +278,11 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	}
 
 	var assert app.Assert
-	if len(flags.AssertExpr) != 0 {
+	if len(flags.AssertExpressions) != 0 {
 		// Build the assertions like: equals, contain, etc from the CLI expression.
-		all, err := buildAssertObjectFromExpressions(flags.AssertExpr)
+		all, err := buildAssertObjectFromExpressions(flags.AssertExpressions)
 		if err != nil {
-			return nil, err
+			return nil, oops.Err(oops.AssertionExpressionParsingFailure, "failed to parse the assertion expression", err)
 		}
 
 		assert = app.NewAssert(flags.Status, Some(all))
@@ -304,7 +386,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 		}
 
 		return nil, fmt.Errorf(
-			"invalid assertion syntax at #%d: %q. Expected one of:\n  - exists <jsonpath>\n  - equals <jsonpath> <value>\n  - contains <jsonpath> <value>",
+			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <jsonpath>\n  - equals <jsonpath> <value>\n  - contains <jsonpath> <value>",
 			i+1, raw,
 		)
 	}

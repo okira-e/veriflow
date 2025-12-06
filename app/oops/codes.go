@@ -16,6 +16,7 @@ const (
 	ConfigFileNotFound
 	ErrInvalidInput
 	MissingRequiredFlag
+	AssertionExpressionParsingFailure
 	// File operation errors
 	FileReadError
 	FileWriteError
@@ -57,6 +58,8 @@ const (
 	JSONParseError
 	// Authentication errors
 	AuthenticationError
+	// JSONPath validation errors
+	JSONPathValidationError
 )
 
 func (code Code) String() string {
@@ -84,6 +87,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("ErrInvalidInput")
 	case MissingRequiredFlag:
 		return PascalToScreamingSnake("MissingRequiredFlag")
+	case AssertionExpressionParsingFailure:
+		return PascalToScreamingSnake("AssertionExpressionParsingFailure")
 	case FileReadError:
 		return PascalToScreamingSnake("FileReadError")
 	case FileWriteError:
@@ -148,6 +153,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("JSONParseError")
 	case AuthenticationError:
 		return PascalToScreamingSnake("AuthenticationError")
+	case JSONPathValidationError:
+		return PascalToScreamingSnake("JSONPathValidationError")
 	default:
 		return "UNKNOWN"
 	}
@@ -157,7 +164,7 @@ func (code Code) IsUserError() bool {
 	switch code {
 	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
 		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError,
-		FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestNotFound, StepRequestBuildFailed, StepRequestProcessingFailed, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag:
+		FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestNotFound, StepRequestBuildFailed, StepRequestProcessingFailed, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag, AssertionExpressionParsingFailure, JSONPathValidationError:
 		return true
 	}
 
