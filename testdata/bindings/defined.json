@@ -1,0 +1,60 @@
+{
+    "projectName": "Test: Variable",
+    "baseUrl": "http://localhost:8080",
+    "flows": [
+        {
+            "name": "user-onboarding",
+            "steps": [
+                {
+                    "name": "register",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": {
+                            "email": "test@example.com",
+                            "password": "P@ssw0rd!"
+                        }
+                    },
+                    "assert": {
+                        "status": 201,
+                        "all": [
+                            {
+                                "jsonpath": "$.data.email",
+                                "exists": true,
+                                "contains": null,
+                                "equals": "test@example.com",
+                                "secret": false
+                            }
+                        ]
+                    },
+                    "exports": {
+                        "email": "$.data.email"
+                    }
+                },
+                {
+                    "name": "login",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": {
+                            "email": "{{var:email}}"
+                        }
+                    },
+                    "assert": {
+                        "status": 200,
+                        "all": [
+                            {
+                                "jsonpath": "$.email",
+                                "exists": true,
+                                "contains": null,
+                                "equals": "test@example.com",
+                                "secret": false
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
+

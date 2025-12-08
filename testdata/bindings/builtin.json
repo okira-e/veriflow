@@ -17,12 +17,18 @@
                     },
                     "assert": {
                         "status": 201,
-                        "all": null
+                        "all": [
+                            {
+                                "jsonpath": "$.email",
+                                "exists": true,
+                                "contains": "test-{{RUN_ID}}",
+                                "equals": null,
+                                "secret": false
+                            }
+                        ]
                     },
                     "exports": {
-                        "userId": {
-                            "jsonpath": "$.id"
-                        }
+                        "userId": "$.id"
                     }
                 }
             ]

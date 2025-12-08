@@ -35,9 +35,7 @@
                         ]
                     },
                     "exports": {
-                        "userId": {
-                            "jsonpath": "$.id"
-                        }
+                        "userId": "$.id"
                     }
                 }
             ]

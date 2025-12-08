@@ -36,7 +36,7 @@ type StepOptions struct {
 type Request struct {
 	Method string                 `json:"method"`
 	Path   string                 `json:"path"`
-	Json   Option[map[string]any] `json:"json"`
+	Json   Option[map[string]any] `json:"json"` // @TODO: I put xml as the key instead of json and no unmarshal error happened.
 }
 
 func NewRequest(method string, path string, json map[string]any) Request {
@@ -54,10 +54,10 @@ func NewRequest(method string, path string, json map[string]any) Request {
 
 type Assert struct {
 	Status int                 `json:"status"`
-	All    Option[[]Assertion] `json:"all"`
+	All    Option[[]*Assertion] `json:"all"`
 }
 
-func NewAssert(status int, all Option[[]Assertion]) Assert {
+func NewAssert(status int, all Option[[]*Assertion]) Assert {
 	return Assert{
 		Status: status,
 		All:    all,
@@ -112,6 +112,8 @@ func (self *Assertion) Validate(body []byte) error {
 		return oops.Err(oops.StepResponseEmpty, "step's response body is empty", nil)
 	}
 
+	// @TODO: Make exists nullable as being `false` should only imply it shouldn't exist
+	
 	var response any
 	err := json.Unmarshal(body, &response)
 	if err != nil {
@@ -151,14 +153,8 @@ func (self *Assertion) Validate(body []byte) error {
 	return nil
 }
 
-type Exports = map[string]ExportExpression
+type Exports = map[string]string // var_name->jsonpath
 
-type ExportExpression struct {
-	JsonPath Option[string] `json:"jsonpath"`
-}
-
-func NewExportExpression(jsonPath Option[string]) ExportExpression {
-	return ExportExpression{
-		JsonPath: jsonPath,
-	}
+func NewExportExpression(jsonPath Option[string]) Exports {
+	return map[string]string{}
 }

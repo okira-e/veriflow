@@ -42,6 +42,7 @@ const (
 	StepRequestResponseKeyNotFound
 	StepRequestResponseKeyForbidden
 	StepRequestResponseValueMismatch
+	StepExportFailed
 	// Config errors
 	ConfigCreationError
 	ConfigMarshalError
@@ -127,6 +128,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("StepRequestResponseKeyForbidden")
 	case StepRequestResponseValueMismatch:
 		return PascalToScreamingSnake("StepRequestResponseValueMismatch")
+	case StepExportFailed:
+		return PascalToScreamingSnake("StepExportFailed")
 	case StepResponseEmpty:
 		return PascalToScreamingSnake("StepResponseEmpty")
 	case StepRequestDeadlineExceeded:

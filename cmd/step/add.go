@@ -23,6 +23,7 @@ type addCmdFlags struct {
 	Json              string
 	Status            int `validate:"required,gt=99,lt=600"`
 	AssertExpressions []string
+	ExportExpressions []string
 }
 
 func newAddCmd() *cobra.Command {
@@ -41,6 +42,11 @@ Assertions syntax:
 
   contains <jsonpath> <value>
     Example: --assert "contains $.roles admin"
+
+Exports syntax:
+  <varname> <jsonpath>
+    Example: --export "user_id $.data.user_id"
+    Example: --export "token $.data.token"
 `,
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -55,6 +61,7 @@ Assertions syntax:
 	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional)")
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
 	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
+	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname jsonpath)")
 
 	return cmd
 }
@@ -187,6 +194,12 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 		}
 	}
 
+	if len(flags.ExportExpressions) == 0 {
+		if err := promptForExports(flags); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -265,6 +278,55 @@ func promptForAssertions(flags *addCmdFlags) error {
 	return nil
 }
 
+func promptForExports(flags *addCmdFlags) error {
+	addExports, err := cli.PromptForBool("Export variables from the response?")
+	if err != nil {
+		return err
+	}
+
+	if !addExports {
+		return nil
+	}
+
+	exports := []string{}
+
+	for {
+		varName, err := cli.PromptForString("Variable name (e.g., user_id)", "", true)
+		if err != nil {
+			return err
+		}
+
+		jsonPath, err := cli.PromptForString("JSONPath (e.g., $.data.id)", "$.data.id", true)
+		if err != nil {
+			return err
+		}
+
+		jsonPath = strings.TrimSpace(jsonPath)
+		if jsonPath != "" && jsonPath[0] != '$' {
+			jsonPath = "$" + jsonPath
+		}
+
+		if err := validateJSONPath(jsonPath); err != nil {
+			return oops.Err(oops.JSONPathValidationError, fmt.Sprintf("invalid JSONPath %q", jsonPath), err)
+		}
+
+		exportExpr := fmt.Sprintf("%s %s", strings.TrimSpace(varName), jsonPath)
+		exports = append(exports, exportExpr)
+
+		addMore, err := cli.PromptForBool("Add another export?")
+		if err != nil {
+			return err
+		}
+
+		if !addMore {
+			break
+		}
+	}
+
+	flags.ExportExpressions = exports
+	return nil
+}
+
 func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) {
 	var parsedJson map[string]any = nil
 	if flags.Json != "" {
@@ -288,12 +350,15 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 		assert = app.NewAssert(flags.Status, Some(all))
 	} else {
 		// Nothing to assert other than the status of the response.
-		assert = app.NewAssert(flags.Status, None[[]app.Assertion]())
+		assert = app.NewAssert(flags.Status, None[[]*app.Assertion]())
 	}
 
 	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
 
-	exports := app.Exports{}
+	exports, err := buildExportsFromExpressions(flags.ExportExpressions)
+	if err != nil {
+		return nil, oops.Err(oops.ErrInvalidInput, "failed to parse export expressions", err)
+	}
 
 	step := app.NewStep(stepName, request, assert, exports)
 
@@ -308,7 +373,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 //	contains <jsonpath> <value>
 //
 // @AI
-func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, error) {
+func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
 	// Patterns (case-insensitive). Uses RE2 via Go's regexp package.
 	var (
 		reExists = regexp.MustCompile(`(?i)^\s*exists\s+(\$[^\s]+)\s*$`)
@@ -321,7 +386,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 		)
 	)
 
-	asserts := make([]app.Assertion, 0, len(assertExpr))
+	asserts := make([]*app.Assertion, 0, len(assertExpr))
 
 	for i, raw := range assertExpr {
 		s := strings.TrimSpace(raw)
@@ -342,7 +407,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 				Equals:   None[string](),
 				Secret:   false,
 			}
-			asserts = append(asserts, assertion)
+			asserts = append(asserts, &assertion)
 			continue
 		}
 
@@ -368,7 +433,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 					Equals:   Some(val),
 					Secret:   false,
 				}
-				asserts = append(asserts, assertion)
+				asserts = append(asserts, &assertion)
 			case "contains":
 				assertion := app.Assertion{
 					JsonPath: path,
@@ -377,7 +442,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 					Equals:   None[string](),
 					Secret:   false,
 				}
-				asserts = append(asserts, assertion)
+				asserts = append(asserts, &assertion)
 			default:
 				// Should never happen due to regex, but keep a guard.
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)
@@ -392,6 +457,53 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]app.Assertion, err
 	}
 
 	return asserts, nil
+}
+
+// buildExportsFromExpressions converts CLI --export expressions into app.Exports.
+// Valid form: "varname jsonpath"
+// Example: "user_id $.data.user_id"
+func buildExportsFromExpressions(exportExpr []string) (app.Exports, error) {
+	exports := app.Exports{}
+
+	for i, raw := range exportExpr {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("export #%d is empty", i+1), nil)
+		}
+
+		// Split by whitespace - first part is varname, rest is jsonpath
+		parts := strings.Fields(s)
+		if len(parts) < 2 {
+			return nil, oops.Err(
+				oops.ErrInvalidInput,
+				fmt.Sprintf("export #%d: invalid format. Expected 'varname jsonpath', got %q", i+1, raw),
+				nil,
+			)
+		}
+
+		varName := parts[0]
+		jsonPath := strings.Join(parts[1:], " ")
+
+		// Ensure JSONPath starts with $
+		jsonPath = strings.TrimSpace(jsonPath)
+		if jsonPath != "" && jsonPath[0] != '$' {
+			jsonPath = "$" + jsonPath
+		}
+
+		// Validate JSONPath format
+		if err := validateJSONPath(jsonPath); err != nil {
+			return nil, oops.Err(oops.JSONPathValidationError, fmt.Sprintf("export #%d: invalid JSONPath", i+1), err)
+		}
+
+		// Validate variable name (should be a valid identifier)
+		if varName == "" {
+			return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("export #%d: variable name cannot be empty", i+1), nil)
+		}
+
+		exports[varName] = jsonPath
+	}
+
+	return exports, nil
 }
 
 func firstNonEmpty(ss ...string) string {

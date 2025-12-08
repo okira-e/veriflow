@@ -208,4 +208,53 @@ func TestRunAddCmd(t *testing.T) {
 			t.Errorf("expected contains value @, got %s", assertions[2].Contains.Unwrap())
 		}
 	})
+
+	// Test case 4: Add step with exports
+	t.Run("add step with exports", func(t *testing.T) {
+		flags := addCmdFlags{
+			Flow:   "test-flow",
+			Method: "POST",
+			Path:   "/users/register",
+			Status: 201,
+			ExportExpressions: []string{
+				"user_id $.data.user_id",
+				"token $.data.token",
+			},
+		}
+
+		cmd := &cobra.Command{Use: "add"}
+
+		err := runAddCmd(cmd, []string{"register-with-exports"}, flags)
+		if err != nil {
+			t.Fatalf("failed to add step: %v", err)
+		}
+
+		// Verify the step was added with exports
+		loadedCfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		flow, ok := loadedCfg.GetFlow("test-flow")
+		if !ok {
+			t.Fatal("flow not found")
+		}
+
+		step, ok := flow.GetStep("register-with-exports")
+		if !ok {
+			t.Fatal("step not found")
+		}
+
+		if len(step.Exports) != 2 {
+			t.Fatalf("expected 2 exports, got %d", len(step.Exports))
+		}
+
+		if step.Exports["user_id"] != "$.data.user_id" {
+			t.Errorf("expected user_id export to be $.data.user_id, got %s", step.Exports["user_id"])
+		}
+
+		if step.Exports["token"] != "$.data.token" {
+			t.Errorf("expected token export to be $.data.token, got %s", step.Exports["token"])
+		}
+	})
 }

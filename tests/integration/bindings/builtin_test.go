@@ -35,12 +35,23 @@ func TestBuiltinInjectables(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(`{"id":"u1","token":"t1"}`))
+			resp := struct {
+				ID    string `json:"id"`
+				Token string `json:"token"`
+				Email string `json:"email"`
+			}{
+				ID:    "u1",
+				Token: "t1",
+				Email: data.Email, // Test that the assertion will succeed by injecting the {{RUN_ID}} in the assert block
+			}
+
+			b, _ := json.Marshal(resp)
+			w.Write(b)
 		},
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/injectables/builtin.json")
+	cfg, err := config.LoadConfig("../../../testdata/bindings/builtin.json")
 	if err != nil {
 		t.Fatalf("failed loading config path: %v", err)
 	}

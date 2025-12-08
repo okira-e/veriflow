@@ -13,6 +13,3 @@ test:
 
 fmt:
 	go fmt ./...
-
-clean:
-	rm -rf bin
