@@ -23,6 +23,7 @@ go.work
 # IDEs and editors
 .idea/
 .vscode/
+.zed
 *.sublime-workspace
 
 **/.DS_Store

@@ -402,7 +402,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			}
 			assertion := app.Assertion{
 				JsonPath: path,
-				Exists:   true,
+				Exists:   Some(true),
 				Contains: None[string](),
 				Equals:   None[string](),
 				Secret:   false,
@@ -428,7 +428,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			case "equals":
 				assertion := app.Assertion{
 					JsonPath: path,
-					Exists:   false,
+					Exists:   Some(true),
 					Contains: None[string](),
 					Equals:   Some(val),
 					Secret:   false,
@@ -437,7 +437,7 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			case "contains":
 				assertion := app.Assertion{
 					JsonPath: path,
-					Exists:   false,
+					Exists:   Some(true),
 					Contains: Some(val),
 					Equals:   None[string](),
 					Secret:   false,

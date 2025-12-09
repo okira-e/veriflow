@@ -18,7 +18,7 @@ func TestSmoke(t *testing.T) {
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/flows/smoke.json")
+	cfg, err := config.LoadConfig(helpers.TestDataPath("flows/smoke.json"))
 	if err != nil {
 		t.Fatalf("failed loading config path: %v", err)
 	}

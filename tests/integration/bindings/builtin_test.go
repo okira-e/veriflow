@@ -51,7 +51,7 @@ func TestBuiltinInjectables(t *testing.T) {
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/bindings/builtin.json")
+	cfg, err := config.LoadConfig(helpers.TestDataPath("bindings/builtin.json"))
 	if err != nil {
 		t.Fatalf("failed loading config path: %v", err)
 	}

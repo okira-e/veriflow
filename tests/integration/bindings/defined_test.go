@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
 	"github.com/okira-e/veriflow/tests/integration/helpers"
@@ -15,18 +16,14 @@ import (
 func TestVariableInjectables(t *testing.T) {
 	server := helpers.SpinTestServer(map[string]http.HandlerFunc{
 		"/users/register": func(w http.ResponseWriter, r *http.Request) {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(400)
-				return
-			}
+			body, _ := io.ReadAll(r.Body)
 			defer r.Body.Close()
 
 			var data struct {
 				Email    string `json:"email"`
 				Password string `json:"password"`
 			}
-			json.Unmarshal(body, &data)
+			_ = json.Unmarshal(body, &data)
 
 			w.WriteHeader(http.StatusCreated)
 			resp := struct {
@@ -44,28 +41,37 @@ func TestVariableInjectables(t *testing.T) {
 			b, _ := json.Marshal(resp)
 			w.Write(b)
 		},
+
 		"/users/login": func(w http.ResponseWriter, r *http.Request) {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				w.WriteHeader(400)
-				return
-			}
+			body, _ := io.ReadAll(r.Body)
 			defer r.Body.Close()
 
 			var data struct {
 				Email string `json:"email"`
 			}
-			json.Unmarshal(body, &data)
+			_ = json.Unmarshal(body, &data)
 
+			// fail if unresolved placeholder appears
 			if strings.Contains(data.Email, "{{var:email}}") {
 				w.WriteHeader(http.StatusBadRequest)
-				helpers.Log(t, "Found bare {{var:email}} in payload body: %s", data.Email)
 				return
 			}
 
+			// fail if empty
 			if data.Email == "" {
 				w.WriteHeader(http.StatusBadRequest)
-				helpers.Log(t, "Email was not injected: %s", data.Email)
+				return
+			}
+
+			// fail partial placeholder
+			if strings.Contains(data.Email, "{{var:email") {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			// fail case sensitivity
+			if strings.Contains(data.Email, "{{Var:email}}") {
+				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
@@ -84,19 +90,19 @@ func TestVariableInjectables(t *testing.T) {
 	})
 	defer server.Close()
 
-	cfg, err := config.LoadConfig("../../../testdata/bindings/defined.json")
+	cfg, err := config.LoadConfig(helpers.TestDataPath("bindings/defined.json"))
 	if err != nil {
-		t.Fatalf("failed loading config path: %v", err)
+		t.Fatalf("failed loading config: %v", err)
 	}
 
 	cfg.BaseUrl = server.URL
 
-	runner := engine.NewRunner(engine.RunnerSettings{
-		Cfg: cfg,
-	})
+	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
+	cliopts.JSONOutput = true
+	
 	err = runner.Execute()
 	if err != nil {
-		t.Fatalf("flow failed: %v", err)
+		t.Fatalf("flow execution failed: %v", err)
 	}
 }

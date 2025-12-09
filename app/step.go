@@ -53,7 +53,7 @@ func NewRequest(method string, path string, json map[string]any) Request {
 }
 
 type Assert struct {
-	Status int                 `json:"status"`
+	Status int                  `json:"status"`
 	All    Option[[]*Assertion] `json:"all"`
 }
 
@@ -101,7 +101,7 @@ func (self *Assert) validateStatus(status int) error {
 
 type Assertion struct {
 	JsonPath string         `json:"jsonpath"`
-	Exists   bool           `json:"exists"`
+	Exists   Option[bool]   `json:"exists"`
 	Contains Option[string] `json:"contains"`
 	Equals   Option[string] `json:"equals"`
 	Secret   bool           `json:"secret"`
@@ -112,8 +112,6 @@ func (self *Assertion) Validate(body []byte) error {
 		return oops.Err(oops.StepResponseEmpty, "step's response body is empty", nil)
 	}
 
-	// @TODO: Make exists nullable as being `false` should only imply it shouldn't exist
-	
 	var response any
 	err := json.Unmarshal(body, &response)
 	if err != nil {
@@ -121,15 +119,18 @@ func (self *Assertion) Validate(body []byte) error {
 	}
 
 	value, err := jsonpath.JsonPathLookup(response, self.JsonPath)
-	if self.Exists && err != nil {
-		message := fmt.Sprintf("jsonpath '%s' not found in response", self.JsonPath)
-		return oops.Err(oops.StepRequestResponseKeyNotFound, message, err)
-	}
+	if self.Exists.IsSome() {
+		exists := self.Exists.Unwrap()
+		if exists && err != nil {
+			message := fmt.Sprintf("jsonpath '%s' not found in response", self.JsonPath)
+			return oops.Err(oops.StepRequestResponseKeyNotFound, message, err)
+		}
 
-	if !self.Exists && err == nil {
-		// It shouldn't exist, yet it does.
-		message := fmt.Sprintf("jsonpath '%s' found in response but it shouldn't exist", self.JsonPath)
-		return oops.Err(oops.StepRequestResponseKeyForbidden, message, nil)
+		if !exists && err == nil {
+			// It shouldn't exist, yet it does.
+			message := fmt.Sprintf("jsonpath '%s' found in response but it shouldn't exist", self.JsonPath)
+			return oops.Err(oops.StepRequestResponseKeyForbidden, message, nil)
+		}
 	}
 
 	if self.Equals.IsSome() {

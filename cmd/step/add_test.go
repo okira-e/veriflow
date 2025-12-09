@@ -182,7 +182,10 @@ func TestRunAddCmd(t *testing.T) {
 		if assertions[0].JsonPath != "$.id" {
 			t.Errorf("expected jsonpath $.id, got %s", assertions[0].JsonPath)
 		}
-		if !assertions[0].Exists {
+		if !assertions[0].Exists.IsSome() {
+			t.Error("expected exists to be set")
+		}
+		if assertions[0].Exists.Unwrap() == false {
 			t.Error("expected exists to be true")
 		}
 

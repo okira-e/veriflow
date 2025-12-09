@@ -3,7 +3,7 @@
     "baseUrl": "http://localhost:8080",
     "flows": [
         {
-            "name": "user-onboarding",
+            "name": "happy-path",
             "steps": [
                 {
                     "name": "register",
@@ -21,24 +21,18 @@
                             {
                                 "jsonpath": "$.data.email",
                                 "exists": true,
-                                "contains": null,
-                                "equals": "test@example.com",
-                                "secret": false
+                                "equals": "test@example.com"
                             }
                         ]
                     },
-                    "exports": {
-                        "email": "$.data.email"
-                    }
+                    "exports": { "email": "$.data.email" }
                 },
                 {
                     "name": "login",
                     "request": {
                         "method": "POST",
                         "path": "/users/login",
-                        "json": {
-                            "email": "{{var:email}}"
-                        }
+                        "json": { "email": "{{var:email}}" }
                     },
                     "assert": {
                         "status": 200,
@@ -46,10 +40,158 @@
                             {
                                 "jsonpath": "$.email",
                                 "exists": true,
-                                "contains": null,
-                                "equals": "test@example.com",
-                                "secret": false
+                                "equals": "test@example.com"
                             }
+                        ]
+                    }
+                }
+            ]
+        },
+
+        {
+            "name": "missing-var",
+            "steps": [
+                {
+                    "name": "login-missing-var",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": { "email": "{{var:email}}" }
+                    },
+                    "assert": { "status": 400 }
+                }
+            ]
+        },
+
+        {
+            "name": "empty-var",
+            "steps": [
+                {
+                    "name": "register-empty",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": { "email": "", "password": "x" }
+                    },
+                    "assert": { "status": 201 },
+                    "exports": { "email": "$.data.email" }
+                },
+                {
+                    "name": "login-empty",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": { "email": "{{var:email}}" }
+                    },
+                    "assert": { "status": 400 }
+                }
+            ]
+        },
+
+        {
+            "name": "multiple-injectables",
+            "steps": [
+                {
+                    "name": "register-multi",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": {
+                            "email": "multi@example.com",
+                            "password": "x"
+                        }
+                    },
+                    "assert": { "status": 201 },
+                    "exports": { "email": "$.data.email" }
+                },
+                {
+                    "name": "login-multi",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": {
+                            "email": "MULTI_CASE-{{RUN_ID}}-{{var:email}}"
+                        }
+                    },
+                    "assert": { "status": 200 }
+                }
+            ]
+        },
+
+        {
+            "name": "partial-placeholder",
+            "steps": [
+                {
+                    "name": "login-partial",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": { "email": "{{var:email" }
+                    },
+                    "assert": { "status": 400 }
+                }
+            ]
+        },
+
+        {
+            "name": "case-sensitivity",
+            "steps": [
+                {
+                    "name": "register-case",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": { "email": "case@example.com", "password": "x" }
+                    },
+                    "assert": { "status": 201 },
+                    "exports": { "email": "$.data.email" }
+                },
+                {
+                    "name": "login-case",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": { "email": "{{Var:email}}" }
+                    },
+                    "assert": { "status": 400 }
+                }
+            ]
+        },
+
+        {
+            "name": "override-var",
+            "steps": [
+                {
+                    "name": "register-a",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": { "email": "a@example.com", "password": "x" }
+                    },
+                    "assert": { "status": 201 },
+                    "exports": { "email": "$.data.email" }
+                },
+                {
+                    "name": "register-b",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/register",
+                        "json": { "email": "b@example.com", "password": "x" }
+                    },
+                    "assert": { "status": 201 },
+                    "exports": { "email": "$.data.email" }
+                },
+                {
+                    "name": "login-last",
+                    "request": {
+                        "method": "POST",
+                        "path": "/users/login",
+                        "json": { "email": "{{var:email}}" }
+                    },
+                    "assert": {
+                        "status": 200,
+                        "all": [
+                            { "jsonpath": "$.email", "equals": "b@example.com" }
                         ]
                     }
                 }
@@ -57,4 +199,3 @@
         }
     ]
 }
-
