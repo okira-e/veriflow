@@ -7,7 +7,8 @@ type Code int
 const (
 	OK Code = iota
 	Internal
-	FlowDoesntExist
+	FlowNotFound
+	StepNotFound
 	EmptyFlows
 	StepAlreadyExists
 	PromptError
@@ -70,8 +71,10 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("OK")
 	case Internal:
 		return PascalToScreamingSnake("Internal")
-	case FlowDoesntExist:
-		return PascalToScreamingSnake("FlowDoesntExist")
+	case FlowNotFound:
+		return PascalToScreamingSnake("FlowNotFound")
+	case StepNotFound:
+		return PascalToScreamingSnake("StepNotFound")
 	case EmptyFlows:
 		return PascalToScreamingSnake("EmptyFlows")
 	case StepAlreadyExists:
@@ -165,7 +168,7 @@ func (code Code) String() string {
 
 func (code Code) IsUserError() bool {
 	switch code {
-	case FlowDoesntExist, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
+	case FlowNotFound, StepNotFound, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
 		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError,
 		FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestNotFound, StepRequestBuildFailed, StepRequestProcessingFailed, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag, AssertionExpressionParsingFailure, JSONPathValidationError:
 		return true

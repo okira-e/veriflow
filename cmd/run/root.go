@@ -2,12 +2,15 @@ package run
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
+	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +34,7 @@ func newRootCmd() *cobra.Command {
 		Short: "Runs the testing engine against the configuration file",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := rootCmd(rootFlags)
+			err := rootCmd(rootFlags, args)
 			cli.HandleCliError(err, cliopts.Verbose)
 
 			return nil
@@ -48,7 +51,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-func rootCmd(rootFlags *runRootFlags) error {
+func rootCmd(rootFlags *runRootFlags, args []string) error {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return err
@@ -64,13 +67,53 @@ func rootCmd(rootFlags *runRootFlags) error {
 
 	runner := engine.NewRunner(runnerConfig)
 	start := time.Now()
-	err = runner.Execute()
+
+	// Conditionally choose which flows/steps to run
+	if len(args) > 0 {
+		for _, arg := range args {
+			if strings.Contains(arg, "/") {
+				flowName := strings.Split(arg, "/")[0]
+				stepName := strings.Split(arg, "/")[1]
+
+				flow, ok := cfg.GetFlow(flowName)
+				if !ok {
+					msg := fmt.Sprintf("flow \"%s\" doesn't exist", flowName)
+					return oops.Err(oops.FlowNotFound, msg, nil)
+				}
+
+				step, ok := flow.GetStep(stepName)
+				if !ok {
+					msg := fmt.Sprintf("step \"%s\" doesn't exist on flow \"%s\"", stepName, flowName)
+					return oops.Err(oops.StepNotFound, msg, nil)
+				}
+
+				err = runner.ExecuteStep(step, map[string]any{})
+				if err != nil {
+					break
+				}
+			} else {
+				flow, ok := cfg.GetFlow(arg)
+				if !ok {
+					msg := fmt.Sprintf("flow \"%s\" doesn't exist", arg)
+					return oops.Err(oops.FlowNotFound, msg, nil)
+				}
+
+				err = runner.ExecuteFlow(flow)
+				if err != nil {
+					break
+				}
+			}
+		}
+	} else {
+		err = runner.ExecuteAll()
+	}
+
 	if err != nil {
 		// Report the error through the engine if it's an execution error ie an assertion
 		// failure.
-		var execErr *engine.AssertionFailure
-		if errors.As(err, &execErr) {
-			runner.ReportFailure(execErr, Some(time.Since(start)))
+		var assertionError *engine.AssertionFailure
+		if errors.As(err, &assertionError) {
+			runner.ReportFailure(assertionError, Some(time.Since(start)))
 			return nil
 		} else {
 			return err

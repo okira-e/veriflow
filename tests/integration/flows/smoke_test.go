@@ -30,7 +30,7 @@ func TestSmoke(t *testing.T) {
 	})
 
 	// @TODO: Make global args passable for testing
-	err = runner.Execute()
+	err = runner.ExecuteAll()
 	if err != nil {
 		t.Fatalf("flow failed: %v", err)
 	}

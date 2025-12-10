@@ -136,6 +136,9 @@ func (self *Assertion) Validate(body []byte) error {
 	if self.Equals.IsSome() {
 		expected := self.Equals.Unwrap()
 		actual := fmt.Sprintf("%v", value)
+		if actual == "<nil>" {
+			actual = "null"
+		}
 		if actual != expected {
 			message := fmt.Sprintf("jsonpath '%s' expected to equal '%s' but got '%s'", self.JsonPath, expected, actual)
 			return oops.Err(oops.StepRequestResponseValueMismatch, message, nil)

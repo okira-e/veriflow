@@ -57,7 +57,7 @@ func NewRunner(settings RunnerSettings) *Runner {
 	}
 }
 
-func (self *Runner) Execute() error {
+func (self *Runner) ExecuteAll() error {
 	for _, flow := range self.settings.Cfg.Flows {
 		err := self.ExecuteFlow(flow)
 		self.flowsRan += 1
@@ -65,7 +65,6 @@ func (self *Runner) Execute() error {
 			// Flag the flow that failed if the error is an ExecutionError.
 			var execFailure *AssertionFailure
 			if errors.As(err, &execFailure) {
-				execFailure.Flow = flow
 				return execFailure
 			} else {
 				return err
@@ -79,13 +78,13 @@ func (self *Runner) Execute() error {
 func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 	symtable := map[string]any{}
 
-	for i, step := range flow.Steps {
-		err := self.ExecuteStep(step, i, symtable)
-		self.stepsRan += 1
+	for _, step := range flow.Steps {
+		err := self.ExecuteStep(step, symtable)
 		if err != nil {
 			// Flag the step that failed if the error is an ExecutionError.
 			var assertionFailure *AssertionFailure
 			if errors.As(err, &assertionFailure) {
+				assertionFailure.Flow = flow
 				assertionFailure.Step = step
 				return assertionFailure
 			} else {
@@ -100,7 +99,7 @@ func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 // Executes a step.
 //
 // Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
-func (self *Runner) ExecuteStep(step *app.Step, i int, symtable map[string]any) error {
+func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
 	baseCtx := context.Background()
 	timeout := step.Options.Timeout
 	if step.Options.Timeout == 0 {
@@ -178,6 +177,8 @@ func (self *Runner) ExecuteStep(step *app.Step, i int, symtable map[string]any) 
 		}
 	}
 
+	self.stepsRan += 1
+
 	return nil
 }
 
@@ -189,13 +190,13 @@ func (self *Runner) GetMaxConcurrent() int {
 	return self.settings.MaxConcurrent
 }
 
-func (self *Runner) ReportFailure(execErr *AssertionFailure, timeTook Option[time.Duration]) {
-	if execErr == nil {
+func (self *Runner) ReportFailure(assertionError *AssertionFailure, timeTook Option[time.Duration]) {
+	if assertionError == nil {
 		return
 	}
 
 	if cliopts.JSONOutput {
-		self.reportFailureJSON(execErr, timeTook)
+		self.reportFailureJSON(assertionError, timeTook)
 		return
 	}
 
@@ -207,14 +208,14 @@ func (self *Runner) ReportFailure(execErr *AssertionFailure, timeTook Option[tim
 	fmt.Printf("Ran %d tests in %d.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
 
 	utils.PrintInColor("grey", "Step: ", false)
-	fmt.Printf("%s/%s", execErr.Flow.Name, execErr.Step.Name)
+	fmt.Printf("%s/%s", assertionError.Flow.Name, assertionError.Step.Name)
 	utils.PrintInColor("grey", " FAILED.", true)
 
 	utils.PrintInColor("grey", "Cause: ", false)
-	fmt.Printf("%s\n", execErr.Err.RootCause().Error())
+	fmt.Printf("%s\n", assertionError.Err.RootCause().Error())
 
-	if len(execErr.Response) != 0 {
-		if pretty, err := utils.PrettyJson(execErr.Response); err == nil {
+	if len(assertionError.Response) != 0 {
+		if pretty, err := utils.PrettyJson(assertionError.Response); err == nil {
 			utils.PrintInColor("grey", "Server Response: ", true)
 			fmt.Println(pretty)
 		}

@@ -61,7 +61,7 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 
 	flow, ok := cfg.GetFlow(flowName)
 	if !ok {
-		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name \"%s\" doesn't exist", flowName), nil)
+		return oops.Err(oops.FlowNotFound, fmt.Sprintf("Flow with name \"%s\" doesn't exist", flowName), nil)
 	}
 
 	confirmed := flags.yes

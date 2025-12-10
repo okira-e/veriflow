@@ -62,7 +62,7 @@ func TestBuiltinInjectables(t *testing.T) {
 		Cfg: cfg,
 	})
 
-	err = runner.Execute()
+	err = runner.ExecuteAll()
 	if err != nil {
 		t.Fatalf("flow failed: %v", err)
 	}

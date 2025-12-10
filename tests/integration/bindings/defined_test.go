@@ -101,7 +101,7 @@ func TestVariableInjectables(t *testing.T) {
 
 	cliopts.JSONOutput = true
 	
-	err = runner.Execute()
+	err = runner.ExecuteAll()
 	if err != nil {
 		t.Fatalf("flow execution failed: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
+	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -110,7 +111,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 	// Validate the flow provided exists.
 	flow, ok := cfg.GetFlow(flags.Flow)
 	if !ok {
-		return oops.Err(oops.FlowDoesntExist, "flow provided doesn't exist", nil)
+		return oops.Err(oops.FlowNotFound, "flow provided doesn't exist", nil)
 	}
 
 	step, err := buildStepFromFlags(stepName, &flags)
@@ -127,6 +128,9 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 	if err != nil {
 		return oops.Err(oops.Internal, "failed to update the config", err)
 	}
+
+	msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
+	utils.PrintInColor("green", msg, true)
 
 	return nil
 }
@@ -181,7 +185,7 @@ func promptForRequiredFlags(flags *addCmdFlags) error {
 func promptForOptionalFlags(flags *addCmdFlags) error {
 	var err error
 
-	if flags.Json == "" {
+	if flags.Json == "" && flags.Method != "GET" {
 		flags.Json, err = cli.PromptForJson("JSON to send", "", false)
 		if err != nil {
 			return err
@@ -215,6 +219,7 @@ func promptForAssertions(flags *addCmdFlags) error {
 
 	assertions := []string{}
 
+	// @TODO: Fix saying "contains null" setting the value as "null" instead of JSON's null.
 	for {
 		// Prompt for assertion type
 		assertionTypeOptions := huh.NewOptions("exists", "equals", "contains")

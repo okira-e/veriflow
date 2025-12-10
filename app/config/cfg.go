@@ -68,7 +68,7 @@ func (self *Cfg) AddFlow(flow *app.Flow) error {
 
 func (self *Cfg) RemoveFlow(flowName string) error {
 	if _, ok := self.GetFlow(flowName); !ok {
-		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name '%s' doesn't exist", flowName), nil)
+		return oops.Err(oops.FlowNotFound, fmt.Sprintf("Flow with name '%s' doesn't exist", flowName), nil)
 	}
 
 	for i, flow := range self.Flows {
@@ -88,7 +88,7 @@ func (self *Cfg) RemoveFlow(flowName string) error {
 
 func (self *Cfg) UpdateFlow(flow *app.Flow) error {
 	if _, ok := self.GetFlow(flow.Name); !ok {
-		return oops.Err(oops.FlowDoesntExist, fmt.Sprintf("Flow with name '%s' doesn't exist", flow.Name), nil)
+		return oops.Err(oops.FlowNotFound, fmt.Sprintf("Flow with name '%s' doesn't exist", flow.Name), nil)
 	}
 
 	for i, f := range self.Flows {
