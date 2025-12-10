@@ -85,7 +85,6 @@ func (self *Runner) ExecuteFlow(flow *app.Flow) error {
 			var assertionFailure *AssertionFailure
 			if errors.As(err, &assertionFailure) {
 				assertionFailure.Flow = flow
-				assertionFailure.Step = step
 				return assertionFailure
 			} else {
 				return err
@@ -155,6 +154,7 @@ func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
 		return &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
 			Response: responseBodyBytes,
+			Step:     step,
 		}
 	}
 
@@ -208,7 +208,14 @@ func (self *Runner) ReportFailure(assertionError *AssertionFailure, timeTook Opt
 	fmt.Printf("Ran %d tests in %d.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
 
 	utils.PrintInColor("grey", "Step: ", false)
-	fmt.Printf("%s/%s", assertionError.Flow.Name, assertionError.Step.Name)
+
+	// We can execute a step directly without its flow
+	flowName := "---"
+	if assertionError.Flow != nil {
+		flowName = assertionError.Flow.Name
+	}
+	fmt.Printf("%s/%s", flowName, assertionError.Step.Name)
+
 	utils.PrintInColor("grey", " FAILED.", true)
 
 	utils.PrintInColor("grey", "Cause: ", false)
@@ -301,12 +308,19 @@ func (self *Runner) reportFailureJSON(execErr *AssertionFailure, timeTook Option
 	if timeTook.IsSome() {
 		took = utils.FormatDuration(timeTook.Unwrap())
 	}
+
+	// We can execute a step directly without its flow
+	flowName := "---"
+	if execErr.Flow != nil {
+		flowName = execErr.Flow.Name
+	}
+
 	out := map[string]any{
 		"took":   took,
 		"status": "failure",
 		"ran":    self.stepsRan,
 		"total":  self.settings.Cfg.GetTotalSteps(),
-		"flow":   execErr.Flow.Name,
+		"flow":   flowName,
 		"step":   execErr.Step.Name,
 		"error":  execErr.Err.RootCause().Error(),
 		"code":   oops.StepRequestAssertionFailed.String(),
