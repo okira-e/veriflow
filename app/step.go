@@ -88,7 +88,7 @@ func (self *Assert) Validate(statusCode int, body []byte) error {
 
 func (self *Assert) validateStatus(status int) error {
 	if status == http.StatusNotFound {
-		return oops.Err(oops.StepRequestNotFound, "request was not found", nil)
+		return oops.Err(oops.StepRequestReturnedNotFound, "request returned a not found status", nil)
 	}
 
 	if status != self.Status {

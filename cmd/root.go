@@ -31,6 +31,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NoColor, "no-color", false, "disable colored output")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.NonInteractive, "non-interactive", false, "disable interactive prompts")
 	rootCmd.PersistentFlags().BoolVarP(&cliopts.Verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVar(&cliopts.Silent, "silent", false, "suppress all output except errors")
 
 	// Respect NO_COLOR env
 	cobra.OnInitialize(func() {

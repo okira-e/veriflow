@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestRunAddCmd(t *testing.T) {
+func TestStepAddCmd(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "veriflow.json")
 
@@ -37,6 +37,7 @@ func TestRunAddCmd(t *testing.T) {
 	// Set the config file path
 	originalConfigFile := cliopts.ConfigFile
 	cliopts.ConfigFile = configPath
+	cliopts.Silent = true
 	cliopts.NonInteractive = true
 	defer func() {
 		cliopts.ConfigFile = originalConfigFile

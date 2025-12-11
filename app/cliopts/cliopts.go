@@ -7,4 +7,5 @@ var (
 	NoColor        bool   // --no-color or NO_COLOR
 	NonInteractive bool   // --no-interactive
 	Verbose        bool   // --verbose
+	Silent         bool   // --silent
 )

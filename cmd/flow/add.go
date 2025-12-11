@@ -11,24 +11,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type addCmdFlags struct {
+	NoSave bool
+}
+
 func newAddCmd() *cobra.Command {
+	var flags addCmdFlags
+
 	cmd := &cobra.Command{
 		Use:   "add [name]",
 		Short: "Add a new flow",
 		Run: func(cmd *cobra.Command, args []string) {
-			err := runAddCmd(cmd, args)
+			err := runAddCmd(cmd, args, flags)
 			cli.HandleCliError(err, cliopts.Verbose)
 		},
 	}
 
+	cmd.Flags().BoolVar(&flags.NoSave, "no-save", false, "Modify the config but don't save on disk")
+
 	return cmd
 }
 
-func runAddCmd(cmd *cobra.Command, args []string) error {
+func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 	var flowName string
 
 	if len(args) > 0 {
-		flowName = args[0]
+	 	flowName = args[0]
 	}
 
 	if flowName == "" {
@@ -50,8 +58,16 @@ func runAddCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	msg := fmt.Sprintf("Flow \"%s\" has been added to veriflow.json", flowName)
-	utils.PrintInColor("green", msg, true)
+	if !flags.NoSave {
+		if err = cfg.Save(); err != nil {
+			return err
+		}
+	}
+
+	if !cliopts.Silent {
+		msg := fmt.Sprintf("Flow \"%s\" has been added to veriflow.json", flowName)
+		utils.PrintInColor("green", msg, true)
+	}
 
 	return nil
 }

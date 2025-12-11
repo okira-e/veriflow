@@ -58,6 +58,10 @@ func (self *Cfg) AddFlow(flow *app.Flow) error {
 
 	self.buildFlowsIndex()
 
+	return nil
+}
+
+func (self *Cfg) Save() error {
 	err := saveConfig(*self)
 	if err != nil {
 		return oops.Err(oops.ConfigFileNotFound, "Error saving config after creating flow", err)
@@ -78,11 +82,6 @@ func (self *Cfg) RemoveFlow(flowName string) error {
 		}
 	}
 
-	err := saveConfig(*self)
-	if err != nil {
-		return oops.Err(oops.FlowRemovalError, "Error saving config after removing flow", err)
-	}
-
 	return nil
 }
 
@@ -96,11 +95,6 @@ func (self *Cfg) UpdateFlow(flow *app.Flow) error {
 			self.Flows[i] = flow
 			break
 		}
-	}
-
-	err := saveConfig(*self)
-	if err != nil {
-		return oops.Err(oops.FlowUpdateError, "Error saving config after updating flow", err)
 	}
 
 	return nil

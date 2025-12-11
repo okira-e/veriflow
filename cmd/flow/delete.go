@@ -13,7 +13,8 @@ import (
 )
 
 type deleteCmdFlags struct {
-	yes bool
+	yes    bool
+	NoSave bool
 }
 
 func newDeleteCmd() *cobra.Command {
@@ -29,6 +30,7 @@ func newDeleteCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&flags.yes, "yes", "y", false, "confirm/accept an action")
+	cmd.Flags().BoolVar(&flags.NoSave, "no-save", false, "Modify the config but don't save on disk")
 
 	return cmd
 }
@@ -85,8 +87,16 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 		return err
 	}
 
-	msg := fmt.Sprintf("Flow \"%s\" has been deleted from veriflow.json", flowName)
-	utils.PrintInColor("green", msg, true)
+	if !flags.NoSave {
+		if err = cfg.Save(); err != nil {
+			return err
+		}
+	}
+
+	if !cliopts.Silent {
+		msg := fmt.Sprintf("Flow \"%s\" has been deleted from veriflow.json", flowName)
+		utils.PrintInColor("green", msg, true)
+	}
 
 	return nil
 }

@@ -23,6 +23,7 @@ type addCmdFlags struct {
 	Path              string `validate:"required,startswith=/"`
 	Json              string
 	Status            int `validate:"required,gt=99,lt=600"`
+	NoSave bool
 	AssertExpressions []string
 	ExportExpressions []string
 }
@@ -63,6 +64,7 @@ Exports syntax:
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
 	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
 	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname jsonpath)")
+	cmd.Flags().BoolVar(&flags.NoSave, "no-save", false, "Modify the config but don't save on disk")
 
 	return cmd
 }
@@ -129,8 +131,16 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 		return oops.Err(oops.Internal, "failed to update the config", err)
 	}
 
-	msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
-	utils.PrintInColor("green", msg, true)
+	if !flags.NoSave {
+		if err = cfg.Save(); err != nil {
+			return err
+		}
+	}
+
+	if !cliopts.Silent {
+		msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
+		utils.PrintInColor("green", msg, true)
+	}
 
 	return nil
 }

@@ -124,7 +124,8 @@ func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
 	}
 
 	url := fmt.Sprintf("%s%s", self.settings.getBaseUrl(), step.Request.Path)
-	req, err := http.NewRequestWithContext(ctx, step.Request.Method, url, body)
+	method := strings.ToUpper(step.Request.Method)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return oops.Err(oops.Internal, "failed to initialize the request for the step", err)
 	}
@@ -141,6 +142,8 @@ func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
 		}
 	}
 	defer resp.Body.Close()
+
+	self.stepsRan += 1
 
 	responseBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -176,8 +179,6 @@ func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
 			symtable[ident] = value
 		}
 	}
-
-	self.stepsRan += 1
 
 	return nil
 }
@@ -248,6 +249,9 @@ func (self *Runner) ReportSuccess(timeTook Option[time.Duration]) {
 }
 
 func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]any) error {
+	// process url path since that might be injected for a dynamic route
+	step.Request.Path = self.resolveBindingFromString(step.Request.Path, symtable)
+
 	// Process body
 	if step.Request.Json.IsSome() {
 		requestBody := step.Request.Json.Unwrap()
@@ -264,11 +268,11 @@ func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]a
 		for _, assertion := range assertions {
 			if assertion.Contains.IsSome() {
 				contains := assertion.Contains.Unwrap()
-				assertion.Contains = Some(self.resolveBinding(contains, symtable))
+				assertion.Contains = Some(self.resolveBindingFromString(contains, symtable))
 			}
 			if assertion.Equals.IsSome() {
 				equals := assertion.Equals.Unwrap()
-				assertion.Equals = Some(self.resolveBinding(equals, symtable))
+				assertion.Equals = Some(self.resolveBindingFromString(equals, symtable))
 			}
 		}
 	}
@@ -283,7 +287,7 @@ func (self *Runner) processRequestBody(body map[string]any, symtable map[string]
 	for k, v := range body {
 		switch val := v.(type) {
 		case string:
-			body[k] = self.resolveBinding(val, symtable)
+			body[k] = self.resolveBindingFromString(val, symtable)
 		case map[string]any:
 			body[k], err = self.processRequestBody(val, symtable)
 			if err != nil {
@@ -293,7 +297,7 @@ func (self *Runner) processRequestBody(body map[string]any, symtable map[string]
 		case []any:
 			for i, elem := range val {
 				if s, ok := elem.(string); ok {
-					val[i] = self.resolveBinding(s, symtable)
+					val[i] = self.resolveBindingFromString(s, symtable)
 				}
 			}
 			body[k] = val
@@ -348,12 +352,12 @@ func (self *Runner) reportSuccessJSON(timeTook Option[time.Duration]) {
 	_ = enc.Encode(out)
 }
 
-// resolveBinding takes a string and replaces any injectable bindings built-in or defined
+// resolveBindingFromString takes a string and replaces any injectable bindings built-in or defined
 //
 // Example 1: "test-{{RUN_ID}}" -> "test-12345"
 //
 // Example 2: "test-{{RUN_ID}}" -> "test-12345"
-func (self *Runner) resolveBinding(s string, symtable map[string]any) string {
+func (self *Runner) resolveBindingFromString(s string, symtable map[string]any) string {
 	reBinding := regexp.MustCompile(`\{\{([a-zA-Z0-9_:-]+)\}\}`)
 
 	return reBinding.ReplaceAllStringFunc(s, func(m string) string {
@@ -365,9 +369,9 @@ func (self *Runner) resolveBinding(s string, symtable map[string]any) string {
 			return resolved
 		}
 
-		// user vars: var:key
-		if strings.HasPrefix(inner, "var:") {
-			key := inner[4:]
+		// user bindings: bind:key
+		if strings.HasPrefix(inner, "bind:") {
+			key := inner[5:]
 			if v, ok := symtable[key]; ok {
 				return fmt.Sprintf("%v", v)
 			}

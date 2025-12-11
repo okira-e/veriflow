@@ -120,7 +120,9 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 		}
 	}
 
-	runner.ReportSuccess(Some(time.Since(start)))
+	if !cliopts.Silent {
+		runner.ReportSuccess(Some(time.Since(start)))
+	}
 
 	return nil
 }

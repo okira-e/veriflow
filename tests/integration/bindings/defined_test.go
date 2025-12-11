@@ -52,7 +52,7 @@ func TestVariableInjectables(t *testing.T) {
 			_ = json.Unmarshal(body, &data)
 
 			// fail if unresolved placeholder appears
-			if strings.Contains(data.Email, "{{var:email}}") {
+			if strings.Contains(data.Email, "{{bind:email}}") {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -64,13 +64,13 @@ func TestVariableInjectables(t *testing.T) {
 			}
 
 			// fail partial placeholder
-			if strings.Contains(data.Email, "{{var:email") {
+			if strings.Contains(data.Email, "{{bind:email") {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
 			// fail case sensitivity
-			if strings.Contains(data.Email, "{{Var:email}}") {
+			if strings.Contains(data.Email, "{{Bind:email}}") {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
