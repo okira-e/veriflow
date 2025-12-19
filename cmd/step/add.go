@@ -11,6 +11,7 @@ import (
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/logging"
 	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
 	"github.com/okira-e/veriflow/app/utils"
@@ -23,7 +24,7 @@ type addCmdFlags struct {
 	Path              string `validate:"required,startswith=/"`
 	Json              string
 	Status            int `validate:"required,gt=99,lt=600"`
-	NoSave bool
+	NoSave            bool
 	AssertExpressions []string
 	ExportExpressions []string
 }
@@ -137,10 +138,9 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 		}
 	}
 
-	if !cliopts.Silent {
-		msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
-		utils.PrintInColor("green", msg, true)
-	}
+	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
+	printer.Println(logging.Success, msg)
 
 	return nil
 }
@@ -357,7 +357,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	var assert app.Assert
 	if len(flags.AssertExpressions) != 0 {
 		// Build the assertions like: equals, contain, etc from the CLI expression.
-		all, err := buildAssertObjectFromExpressions(flags.AssertExpressions)
+		all, err := BuildAssertObjectFromExpressions(flags.AssertExpressions)
 		if err != nil {
 			return nil, oops.Err(oops.AssertionExpressionParsingFailure, "failed to parse the assertion expression", err)
 		}
@@ -370,7 +370,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 
 	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
 
-	exports, err := buildExportsFromExpressions(flags.ExportExpressions)
+	exports, err := BuildExportsFromExpressions(flags.ExportExpressions)
 	if err != nil {
 		return nil, oops.Err(oops.ErrInvalidInput, "failed to parse export expressions", err)
 	}
@@ -380,7 +380,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	return step, nil
 }
 
-// buildAssertObjectFromExpressions converts CLI --assert expressions into []app.Assertion.
+// BuildAssertObjectFromExpressions converts CLI --assert expressions into []app.Assertion.
 // Valid forms:
 //
 //	exists   <jsonpath>
@@ -388,7 +388,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 //	contains <jsonpath> <value>
 //
 // @AI
-func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
+func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
 	// Patterns (case-insensitive). Uses RE2 via Go's regexp package.
 	var (
 		reExists = regexp.MustCompile(`(?i)^\s*exists\s+(\$[^\s]+)\s*$`)
@@ -474,10 +474,10 @@ func buildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 	return asserts, nil
 }
 
-// buildExportsFromExpressions converts CLI --export expressions into app.Exports.
+// BuildExportsFromExpressions converts CLI --export expressions into app.Exports.
 // Valid form: "varname jsonpath"
 // Example: "user_id $.data.user_id"
-func buildExportsFromExpressions(exportExpr []string) (app.Exports, error) {
+func BuildExportsFromExpressions(exportExpr []string) (app.Exports, error) {
 	exports := app.Exports{}
 
 	for i, raw := range exportExpr {

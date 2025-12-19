@@ -62,8 +62,13 @@ func TestBuiltinInjectables(t *testing.T) {
 		Cfg: cfg,
 	})
 
-	err = runner.ExecuteAll()
-	if err != nil {
-		t.Fatalf("flow failed: %v", err)
+	for _, flow := range cfg.Flows {
+		symtable := map[string]any{}
+		for _, step := range flow.Steps {
+			err = runner.Execute(step, symtable)
+			if err != nil {
+				t.Fatalf("step failed: %v", err)
+			}
+		}
 	}
 }

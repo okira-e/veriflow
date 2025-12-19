@@ -8,13 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/okira-e/veriflow/app"
-	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
@@ -44,7 +42,6 @@ func (self *RunnerSettings) getBaseUrl() string {
 type Runner struct {
 	settings RunnerSettings
 	RunId    string
-	flowsRan int
 	stepsRan int
 }
 
@@ -57,48 +54,10 @@ func NewRunner(settings RunnerSettings) *Runner {
 	}
 }
 
-func (self *Runner) ExecuteAll() error {
-	for _, flow := range self.settings.Cfg.Flows {
-		err := self.ExecuteFlow(flow)
-		self.flowsRan += 1
-		if err != nil {
-			// Flag the flow that failed if the error is an ExecutionError.
-			var execFailure *AssertionFailure
-			if errors.As(err, &execFailure) {
-				return execFailure
-			} else {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (self *Runner) ExecuteFlow(flow *app.Flow) error {
-	symtable := map[string]any{}
-
-	for _, step := range flow.Steps {
-		err := self.ExecuteStep(step, symtable)
-		if err != nil {
-			// Flag the step that failed if the error is an ExecutionError.
-			var assertionFailure *AssertionFailure
-			if errors.As(err, &assertionFailure) {
-				assertionFailure.Flow = flow
-				return assertionFailure
-			} else {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// Executes a step.
+// Execute a step.
 //
 // Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
-func (self *Runner) ExecuteStep(step *app.Step, symtable map[string]any) error {
+func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 	baseCtx := context.Background()
 	timeout := step.Options.Timeout
 	if step.Options.Timeout == 0 {
@@ -191,62 +150,14 @@ func (self *Runner) GetMaxConcurrent() int {
 	return self.settings.MaxConcurrent
 }
 
-func (self *Runner) ReportFailure(assertionError *AssertionFailure, timeTook Option[time.Duration]) {
-	if assertionError == nil {
-		return
-	}
-
-	if cliopts.JSONOutput {
-		self.reportFailureJSON(assertionError, timeTook)
-		return
-	}
-
-	// existing human output
-	if timeTook.IsSome() {
-		fmt.Printf("Took: %s\n\n", utils.FormatDuration(timeTook.Unwrap()))
-	}
-
-	fmt.Printf("Ran %d tests in %d.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
-
-	utils.PrintInColor("grey", "Step: ", false)
-
-	// We can execute a step directly without its flow
-	flowName := "---"
-	if assertionError.Flow != nil {
-		flowName = assertionError.Flow.Name
-	}
-	fmt.Printf("%s/%s", flowName, assertionError.Step.Name)
-
-	utils.PrintInColor("grey", " FAILED.", true)
-
-	utils.PrintInColor("grey", "Cause: ", false)
-	fmt.Printf("%s\n", assertionError.Err.RootCause().Error())
-
-	if len(assertionError.Response) != 0 {
-		if pretty, err := utils.PrettyJson(assertionError.Response); err == nil {
-			utils.PrintInColor("grey", "Server Response: ", true)
-			fmt.Println(pretty)
-		}
-	}
-
-	fmt.Printf("\n")
-	utils.PrintInColor("red", "Some tests failed.", true)
+func (self *Runner) StepsRan() int {
+	return self.stepsRan
 }
 
-func (self *Runner) ReportSuccess(timeTook Option[time.Duration]) {
-	if cliopts.JSONOutput {
-		self.reportSuccessJSON(timeTook)
-		return
-	}
-
-	// existing human output
-	if timeTook.IsSome() {
-		fmt.Printf("Took: %s\n\n", utils.FormatDuration(timeTook.Unwrap()))
-	}
-
-	fmt.Printf("Ran %d/%d tests.\n\n", self.stepsRan, self.settings.Cfg.GetTotalSteps())
-	utils.PrintInColor("green", "All tests passed.", true)
+func (self *Runner) TotalSteps() int {
+	return self.settings.Cfg.GetTotalSteps()
 }
+
 
 func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]any) error {
 	// process url path since that might be injected for a dynamic route
@@ -305,51 +216,6 @@ func (self *Runner) processRequestBody(body map[string]any, symtable map[string]
 	}
 
 	return body, nil
-}
-
-func (self *Runner) reportFailureJSON(execErr *AssertionFailure, timeTook Option[time.Duration]) {
-	took := "N/A"
-	if timeTook.IsSome() {
-		took = utils.FormatDuration(timeTook.Unwrap())
-	}
-
-	// We can execute a step directly without its flow
-	flowName := "---"
-	if execErr.Flow != nil {
-		flowName = execErr.Flow.Name
-	}
-
-	out := map[string]any{
-		"took":   took,
-		"status": "failure",
-		"ran":    self.stepsRan,
-		"total":  self.settings.Cfg.GetTotalSteps(),
-		"flow":   flowName,
-		"step":   execErr.Step.Name,
-		"error":  execErr.Err.RootCause().Error(),
-		"code":   oops.StepRequestAssertionFailed.String(),
-	}
-
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(out)
-}
-
-func (self *Runner) reportSuccessJSON(timeTook Option[time.Duration]) {
-	took := "N/A"
-	if timeTook.IsSome() {
-		took = utils.FormatDuration(timeTook.Unwrap())
-	}
-	out := map[string]any{
-		"took":   took,
-		"status": "success",
-		"ran":    self.stepsRan,
-		"total":  self.settings.Cfg.GetTotalSteps(),
-	}
-
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(out)
 }
 
 // resolveBindingFromString takes a string and replaces any injectable bindings built-in or defined

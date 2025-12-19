@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
 	"github.com/okira-e/veriflow/tests/integration/helpers"
@@ -29,9 +30,14 @@ func TestSmoke(t *testing.T) {
 		Cfg: cfg,
 	})
 
-	// @TODO: Make global args passable for testing
-	err = runner.ExecuteAll()
-	if err != nil {
-		t.Fatalf("flow failed: %v", err)
+	cliopts.JSONOutput = true
+	for _, flow := range cfg.Flows {
+		symtable := map[string]any{}
+		for _, step := range flow.Steps {
+			err = runner.Execute(step, symtable)
+			if err != nil {
+				t.Fatalf("step failed: %v", err)
+			}
+		}
 	}
 }

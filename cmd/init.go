@@ -7,6 +7,7 @@ import (
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/logging"
 	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
@@ -41,6 +42,7 @@ var initCmd = &cobra.Command{
 			cli.HandleCliError(appErr, cliopts.Verbose)
 		}
 
-		utils.PrintInColor("green", "Default config file created successfully at veriflow.json", true)
+		printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+		printer.Println(logging.Success, "Default config file created successfully at veriflow.json")
 	},
 }

@@ -22,6 +22,7 @@ func NewId() string {
 	return string(id)
 }
 
+// PrettyJson pretty indents your json string
 func PrettyJson(s []byte) (string, error) {
 	var v any
 	if err := json.Unmarshal(s, &v); err != nil {

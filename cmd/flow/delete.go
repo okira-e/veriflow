@@ -7,6 +7,7 @@ import (
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
+	"github.com/okira-e/veriflow/app/logging"
 	"github.com/okira-e/veriflow/app/oops"
 	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
@@ -93,9 +94,10 @@ func runDeleteCmd(cmd *cobra.Command, args []string, flags deleteCmdFlags) error
 		}
 	}
 
+	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 	if !cliopts.Silent {
 		msg := fmt.Sprintf("Flow \"%s\" has been deleted from veriflow.json", flowName)
-		utils.PrintInColor("green", msg, true)
+		printer.Println(logging.Success, msg)
 	}
 
 	return nil

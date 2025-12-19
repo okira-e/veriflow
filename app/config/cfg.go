@@ -82,6 +82,8 @@ func (self *Cfg) RemoveFlow(flowName string) error {
 		}
 	}
 
+	self.buildFlowsIndex()
+
 	return nil
 }
 

@@ -100,9 +100,14 @@ func TestVariableInjectables(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	cliopts.JSONOutput = true
-	
-	err = runner.ExecuteAll()
-	if err != nil {
-		t.Fatalf("flow execution failed: %v", err)
+
+	for _, flow := range cfg.Flows {
+		symtable := map[string]any{}
+		for _, step := range flow.Steps {
+			err = runner.Execute(step, symtable)
+			if err != nil {
+				t.Fatalf("step failed: %v", err)
+			}
+		}
 	}
 }

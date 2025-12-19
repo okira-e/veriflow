@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -87,10 +86,6 @@ func (self *Assert) Validate(statusCode int, body []byte) error {
 }
 
 func (self *Assert) validateStatus(status int) error {
-	if status == http.StatusNotFound {
-		return oops.Err(oops.StepRequestReturnedNotFound, "request returned a not found status", nil)
-	}
-
 	if status != self.Status {
 		message := fmt.Sprintf("expected %d but got %d (status code)", self.Status, status)
 		return oops.Err(oops.StepRequestStatusMismatch, message, nil)
