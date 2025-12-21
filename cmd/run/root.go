@@ -28,6 +28,13 @@ type runRootFlags struct {
 	BaseUrlOverride string
 	TrimResponse    bool
 	Skips           []string
+	KeepGoing       bool
+}
+
+type RunAssertionError struct{}
+
+func (self *RunAssertionError) Error() string {
+	return ""
 }
 
 func newRootCmd() *cobra.Command {
@@ -38,8 +45,12 @@ func newRootCmd() *cobra.Command {
 		Short: "Runs the testing engine against the configuration file",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := rootCmd(rootFlags, args)
+			assertionFailuresHappened, err := rootCmd(rootFlags, args)
 			cli.HandleCliError(err, cliopts.Verbose)
+
+			if assertionFailuresHappened {
+				return &RunAssertionError{} // Signal that we should exit with 1.
+			}
 
 			return nil
 		},
@@ -53,14 +64,17 @@ func newRootCmd() *cobra.Command {
 	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
 	flags.BoolVar(&rootFlags.TrimResponse, "trim-response", true, "Trim response from the server")
 	flags.StringArrayVar(&rootFlags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
+	flags.BoolVar(&rootFlags.KeepGoing, "keep-going", false, "Continue running tests even if some fail")
 
 	return cmd
 }
 
-func rootCmd(rootFlags *runRootFlags, args []string) error {
+// rootCmd starts the `run` command and returns if an assertion failure has happend as well as
+// an error
+func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	runnerConfig := engine.RunnerSettings{
@@ -78,7 +92,7 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 		for _, arg := range args {
 			if arg[0] == '/' {
 				msg := fmt.Sprintf("invalid target \"%s\"", arg)
-				return oops.Err(oops.InvalidTarget, msg, nil)
+				return false, oops.Err(oops.InvalidTarget, msg, nil)
 			}
 			if arg[len(arg)-1] == '/' {
 				arg = arg[:len(arg)-1]
@@ -90,13 +104,13 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 				flow, ok := cfg.GetFlow(flowName)
 				if !ok {
 					msg := fmt.Sprintf("flow \"%s\" doesn't exist", flowName)
-					return oops.Err(oops.FlowNotFound, msg, nil)
+					return false, oops.Err(oops.FlowNotFound, msg, nil)
 				}
 
 				step, ok := flow.GetStep(stepName)
 				if !ok {
 					msg := fmt.Sprintf("step \"%s\" doesn't exist on flow \"%s\"", stepName, flowName)
-					return oops.Err(oops.StepNotFound, msg, nil)
+					return false, oops.Err(oops.StepNotFound, msg, nil)
 				}
 
 				targets = append(targets, Target{Flow: flow, Step: step})
@@ -104,7 +118,7 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 				flow, ok := cfg.GetFlow(arg)
 				if !ok {
 					msg := fmt.Sprintf("flow \"%s\" doesn't exist", arg)
-					return oops.Err(oops.FlowNotFound, msg, nil)
+					return false, oops.Err(oops.FlowNotFound, msg, nil)
 				}
 
 				targets = append(targets, Target{Flow: flow, Step: nil})
@@ -126,13 +140,13 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 			flow, ok := cfg.GetFlow(flowName)
 			if !ok {
 				msg := fmt.Sprintf("flow \"%s\" doesn't exist", flowName)
-				return oops.Err(oops.FlowNotFound, msg, nil)
+				return false, oops.Err(oops.FlowNotFound, msg, nil)
 			}
 
 			step, ok := flow.GetStep(stepName)
 			if !ok {
 				msg := fmt.Sprintf("step \"%s\" doesn't exist on flow \"%s\"", stepName, flowName)
-				return oops.Err(oops.StepNotFound, msg, nil)
+				return false, oops.Err(oops.StepNotFound, msg, nil)
 			}
 
 			targetsToSkip = append(targetsToSkip, Target{Flow: flow, Step: step})
@@ -142,7 +156,7 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 			flow, ok := cfg.GetFlow(flowName)
 			if !ok {
 				msg := fmt.Sprintf("skipped flow \"%s\" doesn't exist", flowName)
-				return oops.Err(oops.FlowNotFound, msg, nil)
+				return false, oops.Err(oops.FlowNotFound, msg, nil)
 			}
 
 			for _, step := range flow.Steps {
@@ -152,27 +166,43 @@ func rootCmd(rootFlags *runRootFlags, args []string) error {
 	}
 
 	runner := engine.NewRunner(runnerConfig)
+
 	start := time.Now()
-	err = runTargets(runner, targets, targetsToSkip, !cliopts.JSONOutput)
-	elapsed := time.Since(start)
+	failures, err := runTargets(runner, targets, targetsToSkip, !cliopts.JSONOutput, rootFlags.TrimResponse, rootFlags.KeepGoing)
 	if err != nil {
-		// Report the error through the engine if it's an execution error ie an assertion
-		// failure.
-		var assertionFailure *engine.AssertionFailure
-		if errors.As(err, &assertionFailure) {
-			reportFailure(runner, assertionFailure, rootFlags.TrimResponse, elapsed)
-			return nil
-		} else {
-			return err
-		}
+		return false, err // This is a program error and not an assertion failure.
+	}
+	elapsed := time.Since(start)
+
+	if cliopts.JSONOutput {
+		reportJSON(
+			failures == 0,
+			elapsed,
+			runner.StepsRan(),
+			runner.TotalSteps(),
+		)
+	} else {
+		report(
+			failures == 0,
+			elapsed,
+			runner.StepsRan(),
+			runner.TotalSteps(),
+		)
 	}
 
-	reportSuccess(runner, elapsed)
-
-	return nil
+	return failures != 0, nil
 }
 
-func runTargets(runner *engine.Runner, targets []Target, targetsToSkip []Target, logText bool) error {
+func runTargets(
+	runner *engine.Runner,
+	targets []Target,
+	targetsToSkip []Target,
+	logText bool,
+	trimResponse bool,
+	keepGoing bool,
+) (int, error) {
+	failures := 0
+
 	// Conditionally assign a NullPritner so that printing doesn't happen with if-else hell.
 	var printer logging.Printer
 	if logText {
@@ -181,64 +211,90 @@ func runTargets(runner *engine.Runner, targets []Target, targetsToSkip []Target,
 		printer = logging.NullPrinter{}
 	}
 
-	var err error
 	for _, target := range targets {
-		// Run a single flow.
+		// Run a single step.
 		if target.Step != nil {
+			// @Dupe
 			step := target.Step
 			if includesFullTarget(targetsToSkip, target) {
 				continue
 			}
-			msg := fmt.Sprintf("Running %s...", step.Name)
+			printer.Styled(logging.Info, logging.Grey, "Running ", false)
+			msg := fmt.Sprintf("%s...", step.Name)
 			printer.Print(logging.Info, msg)
-			err = runner.Execute(step, map[string]any{})
+			err := runner.Execute(step, map[string]any{})
 			if err != nil {
+				isAssertionFailure := false
+				// Count this as one of the failures if it is an assertion failure.
+				var assertionFailure *engine.AssertionFailure
+				if errors.As(err, &assertionFailure) {
+					failures += 1
+					isAssertionFailure = true
+				}
+
 				printer.Styled(logging.Info, logging.Red, "FAILED", true)
-				break
+
+				if !keepGoing {
+					// Report the error through the engine if it's an assertion failure.
+					if isAssertionFailure {
+						reportAssertionFailure(assertionFailure, trimResponse)
+						return failures, nil
+					} else {
+						return failures, err // Return any other error that's not an assertion failure
+					}
+				}
+			} else {
+				printer.Styled(logging.Info, logging.Green, "OK", true)
 			}
-			printer.Styled(logging.Info, logging.Green, "OK", true)
 		} else {
+			// @Dupe
 			// Run a complete flow
 			symtable := map[string]any{}
 			for _, step := range target.Flow.Steps {
 				if includesFullTarget(targetsToSkip, Target{Flow: target.Flow, Step: step}) {
 					continue
 				}
-				msg := fmt.Sprintf("Running %s/%s...", target.Flow.Name, step.Name)
+				printer.Styled(logging.Info, logging.Grey, "Running ", false)
+				msg := fmt.Sprintf("%s/%s...", target.Flow.Name, step.Name)
 				printer.Print(logging.Info, msg)
 				err := runner.Execute(step, symtable)
 				if err != nil {
-					printer.Styled(logging.Info, logging.Red, "FAILED", true)
-					// Flag the step that failed if the error is an ExecutionError.
+					isAssertionFailure := false
+					// Count this as one of the failures if it is an assertion failure.
 					var assertionFailure *engine.AssertionFailure
 					if errors.As(err, &assertionFailure) {
-						assertionFailure.Flow = target.Flow
-						return assertionFailure
-					} else {
-						return err
+						failures += 1
+						isAssertionFailure = true
 					}
+
+					printer.Styled(logging.Info, logging.Red, "FAILED", true)
+
+					if !keepGoing {
+						// Report the error through the engine if it's an assertion failure.
+						if isAssertionFailure {
+							assertionFailure.Flow = target.Flow // Flag the step that failed if the error is an ExecutionError.
+							reportAssertionFailure(assertionFailure, trimResponse)
+							return failures, nil
+						} else {
+							return failures, err // Return any other error that's not an assertion failure
+						}
+					}
+				} else {
+					printer.Styled(logging.Info, logging.Green, "OK", true)
 				}
-				printer.Styled(logging.Info, logging.Green, "OK", true)
 			}
 		}
 	}
 
-	return err
+	return failures, nil
 }
 
-func reportFailure(runner *engine.Runner, assertionFailure *engine.AssertionFailure, trimResponse bool, elapsed time.Duration) {
+func reportAssertionFailure(assertionFailure *engine.AssertionFailure, trimResponse bool) {
 	if cliopts.JSONOutput {
-		reportFailureJSON(runner, assertionFailure, elapsed)
 		return
 	}
 
 	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-
-	timeTookMsg := fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed))
-	printer.Println(logging.Info, timeTookMsg)
-
-	ranMsg := fmt.Sprintf("Ran %d/%d tests.", runner.StepsRan(), runner.TotalSteps())
-	printer.Println(logging.Info, ranMsg)
 
 	printer.Styled(logging.Info, logging.Grey, "Step: ", false)
 
@@ -266,12 +322,10 @@ func reportFailure(runner *engine.Runner, assertionFailure *engine.AssertionFail
 			printer.Println(logging.Info, strings.Join(lines, "\n"))
 		}
 	}
-
-	printer.Print(logging.Info, "\n")
-	printer.Styled(logging.Info, logging.Red, "Some tests failed.", true)
 }
 
-func reportFailureJSON(runner *engine.Runner, assertionFailure *engine.AssertionFailure, elapsed time.Duration) {
+// @TODO: Figure out how to report individual step error when not --keep-going with reportJSON happening.
+func reportAssertionFailureJSON(assertionFailure *engine.AssertionFailure) {
 	printer := logging.NewJSONPrinter(cliopts.Silent)
 
 	flowName := "---"
@@ -280,46 +334,38 @@ func reportFailureJSON(runner *engine.Runner, assertionFailure *engine.Assertion
 	}
 
 	result := map[string]any{
-		"took":    utils.FormatDuration(elapsed),
-		"success": false,
-		"ran":     runner.StepsRan(),
-		"total":   runner.TotalSteps(),
-		"flow":    flowName,
-		"step":    assertionFailure.Step.Name,
-		"error":   assertionFailure.Err.RootCause().Error(),
-		"code":    oops.StepRequestAssertionFailed.String(),
+		"flow":  flowName,
+		"step":  assertionFailure.Step.Name,
+		"error": assertionFailure.Err.RootCause().Error(),
+		"code":  oops.StepRequestAssertionFailed.String(),
 	}
 
 	printer.PrintStructured(result)
 }
 
-func reportSuccess(runner *engine.Runner, elapsed time.Duration) {
-	if cliopts.JSONOutput {
-		reportSuccessJSON(runner, elapsed)
-		return
-	}
-
+func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
 	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 
-	// Print timing
-	timeTookMsg := fmt.Sprintf("Took: %s", utils.FormatDuration(elapsed))
+	timeTookMsg := fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed))
 	printer.Println(logging.Info, timeTookMsg)
-
-	// Print test count
-	ranMsg := fmt.Sprintf("Ran %d/%d tests.", runner.StepsRan(), runner.TotalSteps())
+	ranMsg := fmt.Sprintf("Ran %d/%d tests.", stepsRan, totalSteps)
 	printer.Println(logging.Info, ranMsg)
 
-	printer.Styled(logging.Info, logging.Green, "All tests passed.", true)
+	if success {
+		printer.Styled(logging.Info, logging.Green, "All tests passed.", true)
+	} else {
+		printer.Styled(logging.Info, logging.Red, "Some tests have failed", true)
+	}
 }
 
-func reportSuccessJSON(runner *engine.Runner, elapsed time.Duration) {
+func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
 	printer := logging.NewJSONPrinter(cliopts.Silent)
 
 	result := map[string]any{
 		"took":    utils.FormatDuration(elapsed),
-		"success": true,
-		"ran":     runner.StepsRan(),
-		"total":   runner.TotalSteps(),
+		"success": success,
+		"ran":     stepsRan,
+		"total":   totalSteps,
 	}
 
 	printer.PrintStructured(result)

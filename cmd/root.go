@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 
 	"github.com/okira-e/veriflow/app/cli"
@@ -51,6 +52,10 @@ func Execute() {
 	run.SetupRunCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
+		if errors.Is(err, &run.RunAssertionError{}) { // An assertion failure happened from the server not a veriflow error.
+			os.Exit(1)
+		}
+
 		cli.HandleCliError(err, cliopts.Verbose)
 	}
 }
