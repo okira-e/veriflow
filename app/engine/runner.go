@@ -130,7 +130,7 @@ func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 
 	// Validate assertion
 
-	err = step.Assert.Validate(resp.StatusCode, responseBodyBytes)
+	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyBytes)
 	if err != nil {
 		return &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
