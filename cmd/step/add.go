@@ -420,7 +420,6 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 				Exists:   Some(true),
 				Contains: None[string](),
 				Equals:   None[string](),
-				Secret:   false,
 			}
 			asserts = append(asserts, &assertion)
 			continue
@@ -446,7 +445,6 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 					Exists:   Some(true),
 					Contains: None[string](),
 					Equals:   Some(val),
-					Secret:   false,
 				}
 				asserts = append(asserts, &assertion)
 			case "contains":
@@ -455,7 +453,6 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 					Exists:   Some(true),
 					Contains: Some(val),
 					Equals:   None[string](),
-					Secret:   false,
 				}
 				asserts = append(asserts, &assertion)
 			default:

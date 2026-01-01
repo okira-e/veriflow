@@ -75,3 +75,18 @@ func FormatDuration(duration time.Duration) string {
 
 	return duration.Truncate(time.Millisecond).String()
 }
+
+func Stringify(val any) (string, error) {
+	b, err := json.Marshal(val)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
+func Parse[T any](s string) (T, error) {
+	var v T
+	err := json.Unmarshal([]byte(s), &v)
+	return v, err
+}

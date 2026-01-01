@@ -33,9 +33,10 @@ type StepOptions struct {
 }
 
 type Request struct {
-	Method string                 `json:"method"`
-	Path   string                 `json:"path"`
-	Json   Option[map[string]any] `json:"json"` // @TODO: I put xml as the key instead of json and no unmarshal error happened.
+	Method         string                 `json:"method"`
+	Path           string                 `json:"path"`
+	Json           Option[map[string]any] `json:"json"` // @TODO: I put xml as the key instead of json and no unmarshal error happened.
+	DisableHeaders bool                   `json:"disableHeaders"`
 }
 
 func NewRequest(method string, path string, json map[string]any) Request {
@@ -45,9 +46,10 @@ func NewRequest(method string, path string, json map[string]any) Request {
 	}
 
 	return Request{
-		Method: method,
-		Path:   path,
-		Json:   optionalJson,
+		Method:         method,
+		Path:           path,
+		Json:           optionalJson,
+		DisableHeaders: false, // By default we implictly set and include headers
 	}
 }
 
@@ -99,7 +101,6 @@ type Assertion struct {
 	Exists   Option[bool]   `json:"exists"`
 	Contains Option[string] `json:"contains"`
 	Equals   Option[string] `json:"equals"`
-	Secret   bool           `json:"secret"`
 }
 
 func (self *Assertion) Validate(body []byte) error {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"regexp"
 	"strings"
 	"time"
@@ -43,14 +44,25 @@ type Runner struct {
 	settings RunnerSettings
 	RunId    string
 	stepsRan int
+	// cookieJar is a per-run cookie jar to maintain stateful cookies across steps.
+	//
+	// it implcitly stores and sends cookies for each request.
+	cookieJar *cookiejar.Jar
 }
 
 func NewRunner(settings RunnerSettings) *Runner {
 	runId := utils.NewId()
 
+	cookieJar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create cookie jar: %v", err))
+	}
+
 	return &Runner{
-		settings: settings,
-		RunId:    runId,
+		settings:  settings,
+		RunId:     runId,
+		stepsRan:  0,
+		cookieJar: cookieJar,
 	}
 }
 
@@ -92,7 +104,14 @@ func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 
 	// Send the request
 
-	resp, err := http.DefaultClient.Do(req)
+	client := http.DefaultClient
+	if !step.Request.DisableHeaders {
+		client = &http.Client{
+			Jar: self.cookieJar, // stateful per-run cookie jar
+		}
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return oops.Err(oops.StepRequestDeadlineExceeded, "request was cancelled by context deadline", err)
@@ -157,7 +176,6 @@ func (self *Runner) StepsRan() int {
 func (self *Runner) TotalSteps() int {
 	return self.settings.Cfg.GetTotalSteps()
 }
-
 
 func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]any) error {
 	// process url path since that might be injected for a dynamic route
