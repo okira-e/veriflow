@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"time"
 	"unicode"
@@ -89,4 +90,17 @@ func Parse[T any](s string) (T, error) {
 	var v T
 	err := json.Unmarshal([]byte(s), &v)
 	return v, err
+}
+
+func ToDuration(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil // caller decides default
+	}
+
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+
+	return d, nil
 }

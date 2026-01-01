@@ -71,9 +71,13 @@ func NewRunner(settings RunnerSettings) *Runner {
 // Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
 func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 	baseCtx := context.Background()
-	timeout := step.Options.Timeout
-	if step.Options.Timeout == 0 {
-		timeout = 30 * time.Second // have a default
+	timeout := 30 * time.Second // have a default
+	if step.Options.Timeout.IsSome() {
+		var err error
+		timeout, err = utils.ToDuration(step.Options.Timeout.Unwrap())
+		if err != nil {
+			return oops.Err(oops.StepRequestProcessingFailed, "failed to parse timeout duration for step", err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(baseCtx, timeout)
@@ -114,7 +118,11 @@ func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return oops.Err(oops.StepRequestDeadlineExceeded, "request was cancelled by context deadline", err)
+			return &AssertionFailure{
+				Err:      oops.Err(oops.StepRequestDeadlineExceeded, "request was cancelled by context deadline", err),
+				Response: nil,
+				Step:     step,
+			}
 		} else {
 			return oops.Err(oops.StepRequestFailed, "failed to execute the request for the step", err)
 		}

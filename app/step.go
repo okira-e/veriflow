@@ -1,8 +1,6 @@
 package app
 
 import (
-	"time"
-
 	. "github.com/okira-e/veriflow/app/opt"
 )
 
@@ -24,7 +22,7 @@ func NewStep(name string, request Request, assert Assert, exports Exports) *Step
 }
 
 type StepOptions struct {
-	Timeout time.Duration `json:"timeout"`
+	Timeout Option[string] `json:"timeout"`
 }
 
 type Request struct {
