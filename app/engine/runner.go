@@ -3,10 +3,12 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/cookiejar"
 	"regexp"
@@ -25,9 +27,6 @@ type RunnerSettings struct {
 	// The settings file for this project.
 	Cfg             *config.Cfg
 	BaseUrlOverride string
-	RunInParallel   bool
-	// MaxConcurrent is the max number of concurrent flows to run which works if RunInParallel is set to true.
-	MaxConcurrent int
 	// DryRun makes the runner validate and print all steps without sending the requests.
 	DryRun bool
 }
@@ -46,8 +45,9 @@ type Runner struct {
 	stepsRan int
 	// cookieJar is a per-run cookie jar to maintain stateful cookies across steps.
 	//
-	// it implcitly stores and sends cookies for each request.
+	// it implicitly stores and sends cookies for each request.
 	cookieJar *cookiejar.Jar
+	symtable  map[string]any
 }
 
 func NewRunner(settings RunnerSettings) *Runner {
@@ -63,13 +63,14 @@ func NewRunner(settings RunnerSettings) *Runner {
 		RunId:     runId,
 		stepsRan:  0,
 		cookieJar: cookieJar,
+		symtable:  map[string]any{},
 	}
 }
 
 // Execute a step.
 //
 // Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
-func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
+func (self *Runner) Execute(step *app.Step) error {
 	baseCtx := context.Background()
 	timeout := 30 * time.Second // have a default
 	if step.Options.Timeout.IsSome() {
@@ -85,7 +86,7 @@ func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 
 	// Setup request body
 
-	self.processBindingsForStep(step, symtable)
+	self.processBindingsForStep(step)
 
 	var body io.Reader
 	if step.Request.Json.IsSome() {
@@ -162,19 +163,11 @@ func (self *Runner) Execute(step *app.Step, symtable map[string]any) error {
 				return oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup jsonpath %s for export %s", jspath, ident), err)
 			}
 
-			symtable[ident] = value
+			self.symtable[ident] = value
 		}
 	}
 
 	return nil
-}
-
-func (self *Runner) GetMaxConcurrent() int {
-	if self.settings.RunInParallel == false {
-		return 1
-	}
-
-	return self.settings.MaxConcurrent
 }
 
 func (self *Runner) StepsRan() int {
@@ -185,14 +178,14 @@ func (self *Runner) TotalSteps() int {
 	return self.settings.Cfg.GetTotalSteps()
 }
 
-func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]any) error {
+func (self *Runner) processBindingsForStep(step *app.Step) error {
 	// process url path since that might be injected for a dynamic route
-	step.Request.Path = self.resolveBindingFromString(step.Request.Path, symtable)
+	step.Request.Path = self.resolveBindingFromString(step.Request.Path)
 
 	// Process body
 	if step.Request.Json.IsSome() {
 		requestBody := step.Request.Json.Unwrap()
-		processedRequestBody, err := self.processRequestBody(requestBody, symtable)
+		processedRequestBody, err := self.processRequestBody(requestBody)
 		if err != nil {
 			return oops.Err(oops.StepRequestProcessingFailed, "failed to process request body", err)
 		}
@@ -205,11 +198,11 @@ func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]a
 		for _, assertion := range assertions {
 			if assertion.Contains.IsSome() {
 				contains := assertion.Contains.Unwrap()
-				assertion.Contains = Some(self.resolveBindingFromString(contains, symtable))
+				assertion.Contains = Some(self.resolveBindingFromString(contains))
 			}
 			if assertion.Equals.IsSome() {
 				equals := assertion.Equals.Unwrap()
-				assertion.Equals = Some(self.resolveBindingFromString(equals, symtable))
+				assertion.Equals = Some(self.resolveBindingFromString(equals))
 			}
 		}
 	}
@@ -218,15 +211,15 @@ func (self *Runner) processBindingsForStep(step *app.Step, symtable map[string]a
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.
-func (self *Runner) processRequestBody(body map[string]any, symtable map[string]any) (map[string]any, error) {
+func (self *Runner) processRequestBody(body map[string]any) (map[string]any, error) {
 	var err error
 
 	for k, v := range body {
 		switch val := v.(type) {
 		case string:
-			body[k] = self.resolveBindingFromString(val, symtable)
+			body[k] = self.resolveBindingFromString(val)
 		case map[string]any:
-			body[k], err = self.processRequestBody(val, symtable)
+			body[k], err = self.processRequestBody(val)
 			if err != nil {
 				return nil, oops.Err(oops.StepRequestProcessingFailed, "failed to process/modify request body", err)
 			}
@@ -234,7 +227,7 @@ func (self *Runner) processRequestBody(body map[string]any, symtable map[string]
 		case []any:
 			for i, elem := range val {
 				if s, ok := elem.(string); ok {
-					val[i] = self.resolveBindingFromString(s, symtable)
+					val[i] = self.resolveBindingFromString(s)
 				}
 			}
 			body[k] = val
@@ -249,7 +242,7 @@ func (self *Runner) processRequestBody(body map[string]any, symtable map[string]
 // Example 1: "test-{{RUN_ID}}" -> "test-12345"
 //
 // Example 2: "test-{{RUN_ID}}" -> "test-12345"
-func (self *Runner) resolveBindingFromString(s string, symtable map[string]any) string {
+func (self *Runner) resolveBindingFromString(s string) string {
 	reBinding := regexp.MustCompile(`\{\{([a-zA-Z0-9_:-]+)\}\}`)
 
 	return reBinding.ReplaceAllStringFunc(s, func(m string) string {
@@ -264,7 +257,7 @@ func (self *Runner) resolveBindingFromString(s string, symtable map[string]any) 
 		// user bindings: bind:key
 		if strings.HasPrefix(inner, "bind:") {
 			key := inner[5:]
-			if v, ok := symtable[key]; ok {
+			if v, ok := self.symtable[key]; ok {
 				return fmt.Sprintf("%v", v)
 			}
 			return m // unresolved stays as-is
@@ -275,8 +268,16 @@ func (self *Runner) resolveBindingFromString(s string, symtable map[string]any) 
 }
 
 func (self *Runner) resolveBuiltinBinding(str string) (string, bool) {
-	if str == "RUN_ID" {
+	switch str {
+	case "RUN_ID":
 		return self.RunId, true
+	case "RAND_DIGIT":
+		n, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			panic("rng unavailable: veriflow requires OS entropy")
+		}
+		return fmt.Sprintf("%d", n.Int64()), true
 	}
+
 	return "", false
 }

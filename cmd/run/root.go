@@ -3,6 +3,9 @@ package run
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -22,8 +25,6 @@ func SetupRunCommands(rootCmd *cobra.Command) {
 }
 
 type runRootFlags struct {
-	Parallel        bool
-	Concurrency     int
 	DryRun          bool
 	BaseUrlOverride string
 	TrimResponse    bool
@@ -58,8 +59,6 @@ func newRootCmd() *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.BoolVar(&rootFlags.Parallel, "parallel", false, "Run all flows and their steps")
-	flags.IntVar(&rootFlags.Concurrency, "concurrency", 1, "Number of concurrent flows to run")
 	flags.BoolVar(&rootFlags.DryRun, "dry-run", false, "Validate and print all steps without executing")
 	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
 	flags.BoolVar(&rootFlags.TrimResponse, "trim-response", true, "Trim response from the server")
@@ -69,7 +68,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-// rootCmd starts the `run` command and returns if an assertion failure has happend as well as
+// rootCmd starts the `run` command and returns if an assertion failure has happened as well as
 // an error
 func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
@@ -77,10 +76,15 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		return false, err
 	}
 
+	// Run the before and defer the after shell functions if they exist before running
+	// the tests.
+	if err := beforeRunCommands(cfg); err != nil {
+		return false, err
+	}
+	defer afterRunCommands(cfg)
+
 	runnerConfig := engine.RunnerSettings{
 		Cfg:             cfg,
-		RunInParallel:   rootFlags.Parallel,
-		MaxConcurrent:   rootFlags.Concurrency,
 		DryRun:          rootFlags.DryRun,
 		BaseUrlOverride: rootFlags.BaseUrlOverride,
 	}
@@ -222,7 +226,7 @@ func runTargets(
 			printer.Styled(logging.Info, logging.Grey, "Running ", false)
 			msg := fmt.Sprintf("%s...", step.Name)
 			printer.Print(logging.Info, msg)
-			err := runner.Execute(step, map[string]any{})
+			err := runner.Execute(step)
 			if err != nil {
 				isAssertionFailure := false
 				// Count this as one of the failures if it is an assertion failure.
@@ -249,7 +253,6 @@ func runTargets(
 		} else {
 			// @Dupe
 			// Run a complete flow
-			symtable := map[string]any{}
 			for _, step := range target.Flow.Steps {
 				if includesFullTarget(targetsToSkip, Target{Flow: target.Flow, Step: step}) {
 					continue
@@ -257,7 +260,7 @@ func runTargets(
 				printer.Styled(logging.Info, logging.Grey, "Running ", false)
 				msg := fmt.Sprintf("%s/%s...", target.Flow.Name, step.Name)
 				printer.Print(logging.Info, msg)
-				err := runner.Execute(step, symtable)
+				err := runner.Execute(step)
 				if err != nil {
 					isAssertionFailure := false
 					// Count this as one of the failures if it is an assertion failure.
@@ -314,8 +317,8 @@ func reportAssertionFailure(assertionFailure *engine.AssertionFailure, trimRespo
 	if len(assertionFailure.Response) != 0 {
 		if pretty, err := utils.PrettyJson(assertionFailure.Response); err == nil {
 			lines := strings.Split(pretty, "\n")
-			if trimResponse && len(lines) > 10 {
-				lines = lines[:10]
+			if trimResponse && len(lines) > 15 {
+				lines = lines[:15]
 			}
 
 			printer.Styled(logging.Info, logging.Grey, "Server Response:\n", false)
@@ -385,4 +388,39 @@ func includesFullTarget(targets []Target, target Target) bool {
 	}
 
 	return false
+}
+
+func execute(cmd string) error {
+	shell := "sh"
+	args := []string{"-c", cmd}
+
+	if runtime.GOOS == "windows" {
+		shell = "cmd"
+		args = []string{"/C", cmd}
+	}
+
+	c := exec.Command(shell, args...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Env = os.Environ()
+
+	return c.Run()
+}
+
+func beforeRunCommands(cfg *config.Cfg) error {
+	for _, cmd := range cfg.BeforeRun {
+		if err := execute(cmd); err != nil {
+			return oops.Err(oops.BeforeRunFailed, "beforeRun command failed", err)
+		}
+	}
+	return nil
+}
+
+func afterRunCommands(cfg *config.Cfg) error {
+	for _, cmd := range cfg.AfterRun {
+		if err := execute(cmd); err != nil {
+			return oops.Err(oops.AfterRunFailed, "afterRun command failed", err)
+		}
+	}
+	return nil
 }

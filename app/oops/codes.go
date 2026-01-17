@@ -47,6 +47,8 @@ const (
 	StepRequestResponseKeyForbidden
 	StepRequestResponseValueMismatch
 	StepExportFailed
+	BeforeRunFailed
+	AfterRunFailed
 	// Config errors
 	ConfigCreationError
 	ConfigMarshalError
@@ -68,7 +70,6 @@ const (
 )
 
 func (code Code) String() string {
-	// thanks Go
 	switch code {
 	case OK:
 		return PascalToScreamingSnake("OK")
@@ -142,6 +143,10 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("StepRequestResponseValueMismatch")
 	case StepExportFailed:
 		return PascalToScreamingSnake("StepExportFailed")
+	case BeforeRunFailed:
+		return PascalToScreamingSnake("BeforeRunFailed")
+	case AfterRunFailed:
+		return PascalToScreamingSnake("AfterRunFailed")
 	case StepResponseEmpty:
 		return PascalToScreamingSnake("StepResponseEmpty")
 	case StepRequestDeadlineExceeded:
@@ -178,7 +183,7 @@ func (code Code) String() string {
 func (code Code) IsUserError() bool {
 	switch code {
 	case FlowNotFound, StepNotFound, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
-		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError:
+		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, BeforeRunFailed, AfterRunFailed, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError:
 		return true
 	}
 

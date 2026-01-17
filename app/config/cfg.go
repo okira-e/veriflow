@@ -14,7 +14,9 @@ import (
 type Cfg struct {
 	ProjectName string      `json:"projectName"`
 	BaseUrl     string      `json:"baseUrl"`
+	BeforeRun   []string    `json:"beforeRun"`
 	Flows       []*app.Flow `json:"flows"`
+	AfterRun    []string    `json:"afterRun"`
 	flowsIdx    map[string]int
 }
 
