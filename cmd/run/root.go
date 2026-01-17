@@ -25,11 +25,13 @@ func SetupRunCommands(rootCmd *cobra.Command) {
 }
 
 type runRootFlags struct {
-	DryRun          bool
-	BaseUrlOverride string
-	TrimResponse    bool
-	Skips           []string
-	KeepGoing       bool
+	DryRun           bool
+	BaseUrlOverride  string
+	ShowFullResponse bool
+	Skips            []string
+	KeepGoing        bool
+	ShowHooks        bool
+	SkipHooks        bool
 }
 
 type RunAssertionError struct{}
@@ -61,9 +63,11 @@ func newRootCmd() *cobra.Command {
 
 	flags.BoolVar(&rootFlags.DryRun, "dry-run", false, "Validate and print all steps without executing")
 	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
-	flags.BoolVar(&rootFlags.TrimResponse, "trim-response", true, "Trim response from the server")
+	flags.BoolVar(&rootFlags.ShowFullResponse, "show-full-response", false, "Display entire server response payload on error")
 	flags.StringArrayVar(&rootFlags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
 	flags.BoolVar(&rootFlags.KeepGoing, "keep-going", false, "Continue running tests even if some fail")
+	flags.BoolVar(&rootFlags.ShowHooks, "show-hooks", false, "Print stdout and stderr from runBefore and runAfter shell commands")
+	flags.BoolVar(&rootFlags.SkipHooks, "skip-hooks", false, "Skip executing runBefore and runAfter shell commands")
 
 	return cmd
 }
@@ -76,22 +80,32 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		return false, err
 	}
 
-	// Run the before and defer the after shell functions if they exist before running
-	// the tests.
-	if err := beforeRunCommands(cfg); err != nil {
-		return false, err
-	}
-	defer afterRunCommands(cfg)
+	///
+	// Run and print the pre/post run hooks if not skipped
+	//
 
-	runnerConfig := engine.RunnerSettings{
-		Cfg:             cfg,
-		DryRun:          rootFlags.DryRun,
-		BaseUrlOverride: rootFlags.BaseUrlOverride,
+	if !rootFlags.SkipHooks {
+		var printer logging.Printer
+		if cliopts.JSONOutput {
+			printer = logging.NullPrinter{}
+		} else {
+			printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+		}
+
+		printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
+		if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
+			return false, err
+		}
+		defer afterRunCommands(cfg, rootFlags.ShowHooks)
+		defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
 	}
 
 	targets := []Target{}
 
+	//
 	// Conditionally choose which flows/steps to run
+	//
+
 	if len(args) > 0 {
 		for _, arg := range args {
 			if arg[0] == '/' {
@@ -134,7 +148,10 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		}
 	}
 
+	//
 	// Collect steps to be skipped.
+	//
+
 	targetsToSkip := []Target{}
 	for _, skip := range rootFlags.Skips {
 		if strings.Contains(skip, "/") {
@@ -169,10 +186,26 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		}
 	}
 
+	//
+	// Run the steps
+	//
+
+	runnerConfig := engine.RunnerSettings{
+		Cfg:             cfg,
+		DryRun:          rootFlags.DryRun,
+		BaseUrlOverride: rootFlags.BaseUrlOverride,
+	}
 	runner := engine.NewRunner(runnerConfig)
 
 	start := time.Now()
-	failures, err := runTargets(runner, targets, targetsToSkip, !cliopts.JSONOutput, rootFlags.TrimResponse, rootFlags.KeepGoing)
+	failures, err := runTargets(
+		runner,
+		targets,
+		targetsToSkip,
+		!cliopts.JSONOutput,
+		!rootFlags.ShowFullResponse,
+		rootFlags.KeepGoing,
+	)
 	if err != nil {
 		return false, err // This is a program error and not an assertion failure.
 	}
@@ -184,6 +217,7 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 			elapsed,
 			runner.StepsRan(),
 			runner.TotalSteps(),
+			!rootFlags.SkipHooks,
 		)
 	} else {
 		report(
@@ -361,14 +395,15 @@ func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
 	}
 }
 
-func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
+func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int, ranHooks bool) {
 	printer := logging.NewJSONPrinter(cliopts.Silent)
 
 	result := map[string]any{
-		"took":    utils.FormatDuration(elapsed),
-		"success": success,
-		"ran":     stepsRan,
-		"total":   totalSteps,
+		"took":     utils.FormatDuration(elapsed),
+		"success":  success,
+		"ran":      stepsRan,
+		"ranHooks": ranHooks,
+		"total":    totalSteps,
 	}
 
 	printer.PrintStructured(result)
@@ -390,7 +425,7 @@ func includesFullTarget(targets []Target, target Target) bool {
 	return false
 }
 
-func execute(cmd string) error {
+func execute(cmd string, silent bool) error {
 	shell := "sh"
 	args := []string{"-c", cmd}
 
@@ -400,25 +435,27 @@ func execute(cmd string) error {
 	}
 
 	c := exec.Command(shell, args...)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
+	if !silent {
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+	}
 	c.Env = os.Environ()
 
 	return c.Run()
 }
 
-func beforeRunCommands(cfg *config.Cfg) error {
+func beforeRunCommands(cfg *config.Cfg, showOutput bool) error {
 	for _, cmd := range cfg.BeforeRun {
-		if err := execute(cmd); err != nil {
+		if err := execute(cmd, !showOutput); err != nil {
 			return oops.Err(oops.BeforeRunFailed, "beforeRun command failed", err)
 		}
 	}
 	return nil
 }
 
-func afterRunCommands(cfg *config.Cfg) error {
+func afterRunCommands(cfg *config.Cfg, showOutput bool) error {
 	for _, cmd := range cfg.AfterRun {
-		if err := execute(cmd); err != nil {
+		if err := execute(cmd, !showOutput); err != nil {
 			return oops.Err(oops.AfterRunFailed, "afterRun command failed", err)
 		}
 	}

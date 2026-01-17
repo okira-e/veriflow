@@ -25,7 +25,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	// @TODO: App panics on unknown flags or smth like `veriflow --version`
 	// Persistent flags are inherited by ALL subcommands.
 	rootCmd.PersistentFlags().StringVar(&cliopts.ConfigFile, "config", "veriflow.json", "specify a config file")
 	rootCmd.PersistentFlags().BoolVar(&cliopts.JSONOutput, "json-output", false, "output machine-readable JSON")

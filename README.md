@@ -15,6 +15,7 @@ Veriflow is a simple yet powerful CLI tool for defining and running end-to-end A
     - [Configuration Reference](#configuration-reference)
     - [CLI Reference](#cli-reference)
     - [Bindings](#bindings)
+    - [Hooks](#hooks)
     - [Session Handling](#session-handling)
     - [Exit Codes](#exit-codes)
 - [Contributing](#contributing)
@@ -150,13 +151,13 @@ The configuration file (`veriflow.json`) has the following structure:
 
 #### Top-Level Fields
 
-| Field         | Type     | Required | Description                                |
-| ------------- | -------- | -------- | ------------------------------------------ |
-| `projectName` | string   | No       | Name of the project                        |
-| `baseUrl`     | string   | Yes      | Base URL for all requests                  |
-| `beforeRun`   | string[] | No       | Shell commands to run before tests start   |
-| `afterRun`    | string[] | No       | Shell commands to run after tests complete |
-| `flows`       | array    | Yes      | Array of flow objects                      |
+| Field         | Type     | Required | Description                                          |
+| ------------- | -------- | -------- | ---------------------------------------------------- |
+| `projectName` | string   | No       | Name of the project                                  |
+| `baseUrl`     | string   | Yes      | Base URL for all requests                            |
+| `beforeRun`   | string[] | No       | Hook: shell commands to run before tests start       |
+| `afterRun`    | string[] | No       | Hook: shell commands to run after tests complete     |
+| `flows`       | array    | Yes      | Array of flow objects                                |
 
 #### Flow Object
 
@@ -260,13 +261,15 @@ veriflow run user-onboarding/register
 veriflow run user-onboarding checkout/payment
 ```
 
-| Flag              | Description                                   |
-| ----------------- | --------------------------------------------- |
-| `--dry-run`       | Validate and print steps without executing    |
-| `--base-url`      | Override the baseUrl from config              |
-| `--skip`          | Skip specific flows or steps (repeatable)     |
-| `--keep-going`    | Continue running even if tests fail           |
-| `--trim-response` | Trim long responses in output (default: true) |
+| Flag                   | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `--dry-run`            | Validate and print steps without executing              |
+| `--base-url`           | Override the baseUrl from config                        |
+| `--skip`               | Skip specific flows or steps (repeatable)               |
+| `--keep-going`         | Continue running even if tests fail                     |
+| `--show-full-response` | Display entire server response payload on error         |
+| `--show-hooks`         | Print stdout/stderr from beforeRun and afterRun hooks   |
+| `--skip-hooks`         | Skip executing beforeRun and afterRun hooks             |
 
 Examples:
 
@@ -414,6 +417,24 @@ Use `{{bind:variable_name}}` to reference exported values from previous steps:
 ```
 
 Bindings are case-sensitive. `{{bind:user_id}}` and `{{bind:User_Id}}` are different.
+
+### Hooks
+
+Hooks are shell commands that run before and after your test suite.
+
+```json
+{
+    "beforeRun": ["docker-compose up -d", "sleep 2"],
+    "afterRun": ["docker-compose down"]
+}
+```
+
+- `beforeRun`: Executes before any tests run (e.g., start services, seed database)
+- `afterRun`: Executes after all tests complete (e.g., cleanup)
+
+Commands run in order. If a `beforeRun` command fails, tests do not run.
+
+Use `--skip-hooks` to skip hook execution, or `--show-hooks` to see their output.
 
 ### Session Handling
 
