@@ -229,7 +229,6 @@ func promptForAssertions(flags *addCmdFlags) error {
 
 	assertions := []string{}
 
-	// @TODO: Fix saying "contains null" setting the value as "null" instead of JSON's null.
 	for {
 		// Prompt for assertion type
 		assertionTypeOptions := huh.NewOptions("exists", "equals", "contains")

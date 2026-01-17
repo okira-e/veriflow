@@ -12,6 +12,7 @@ import (
 )
 
 type Cfg struct {
+	Version     string      `json:"version"`
 	ProjectName string      `json:"projectName"`
 	BaseUrl     string      `json:"baseUrl"`
 	BeforeRun   []string    `json:"beforeRun"`
@@ -20,7 +21,6 @@ type Cfg struct {
 	flowsIdx    map[string]int
 }
 
-// @TODO: Add versioning.
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
 	var defaultConfig Cfg
 	err := json.Unmarshal(defaults.DefaultConfig, &defaultConfig)
@@ -34,6 +34,7 @@ func NewDefaultConfig(baseUrl string) (Cfg, error) {
 		return Cfg{}, oops.Err(oops.Internal, "Failed to get current working directory", err)
 	}
 
+	defaultConfig.Version = "1.0.0"
 	defaultConfig.ProjectName = filepath.Base(cwd)
 
 	defaultConfig.BaseUrl = baseUrl

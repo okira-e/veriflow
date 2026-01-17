@@ -1,6 +1,8 @@
 {
-    "version": 1,
+    "version": "1",
     "projectName": null,
     "baseUrl": null,
+    "beforeRun": [],
+    "afterRun": [],
     "flows": []
 }

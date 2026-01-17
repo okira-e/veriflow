@@ -28,7 +28,7 @@ type StepOptions struct {
 type Request struct {
 	Method         string                 `json:"method"`
 	Path           string                 `json:"path"`
-	Json           Option[map[string]any] `json:"json"` // @TODO: I put xml as the key instead of json and no unmarshal error happened.
+	Json           Option[map[string]any] `json:"json"`
 	DisableHeaders bool                   `json:"disableHeaders"`
 }
 
