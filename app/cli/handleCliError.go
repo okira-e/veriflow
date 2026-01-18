@@ -14,7 +14,7 @@ import (
 // HandleCliError will log and exit the program appropriately based on
 // the error. It will skip if the error is nil.
 // It takes a verbose flag for logging the entire error chain or just the root cause.
-func HandleCliError(err error, verbose bool) {
+func HandleCliError(err error) {
 	if err == nil {
 		return
 	}
@@ -24,7 +24,7 @@ func HandleCliError(err error, verbose bool) {
 	var appErr *oops.AppError
 	isAppErr := errors.As(err, &appErr)
 
-	if !verbose && isAppErr {
+	if !cliopts.Verbose && isAppErr {
 		appErr = appErr.RootCause().(*oops.AppError)
 	}
 

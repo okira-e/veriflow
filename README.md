@@ -151,13 +151,13 @@ The configuration file (`veriflow.json`) has the following structure:
 
 #### Top-Level Fields
 
-| Field         | Type     | Required | Description                                          |
-| ------------- | -------- | -------- | ---------------------------------------------------- |
-| `projectName` | string   | No       | Name of the project                                  |
-| `baseUrl`     | string   | Yes      | Base URL for all requests                            |
-| `beforeRun`   | string[] | No       | Hook: shell commands to run before tests start       |
-| `afterRun`    | string[] | No       | Hook: shell commands to run after tests complete     |
-| `flows`       | array    | Yes      | Array of flow objects                                |
+| Field         | Type     | Required | Description                                      |
+| ------------- | -------- | -------- | ------------------------------------------------ |
+| `projectName` | string   | No       | Name of the project                              |
+| `baseUrl`     | string   | Yes      | Base URL for all requests                        |
+| `beforeRun`   | string[] | No       | Hook: shell commands to run before tests start   |
+| `afterRun`    | string[] | No       | Hook: shell commands to run after tests complete |
+| `flows`       | array    | Yes      | Array of flow objects                            |
 
 #### Flow Object
 
@@ -241,11 +241,25 @@ Creates a new `veriflow.json` configuration file.
 
 ```bash
 veriflow init
+
+# Anything can be non interactive with required flags
+veriflow init --base-url "https://base.com" --non-interactive
 ```
 
 #### veriflow run
 
-Runs test flows.
+Run flows defined in the configuration.
+
+| Flag                   | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `--base-url`           | Override the baseUrl from config                      |
+| `--skip`               | Skip specific flows or steps (repeatable)             |
+| `--keep-going`         | Continue running even if tests fail                   |
+| `--show-full-response` | Display entire server response payload on error       |
+| `--show-hooks`         | Print stdout/stderr from beforeRun and afterRun hooks |
+| `--skip-hooks`         | Skip executing beforeRun and afterRun hooks           |
+
+Examples:
 
 ```bash
 # Run all flows
@@ -257,25 +271,11 @@ veriflow run user-onboarding checkout
 # Run a specific step
 veriflow run user-onboarding/register
 
-# Multiple targets
+# Mixed targets. Specific flows with specific steps
 veriflow run user-onboarding checkout/payment
-```
 
-| Flag                   | Description                                             |
-| ---------------------- | ------------------------------------------------------- |
-| `--dry-run`            | Validate and print steps without executing              |
-| `--base-url`           | Override the baseUrl from config                        |
-| `--skip`               | Skip specific flows or steps (repeatable)               |
-| `--keep-going`         | Continue running even if tests fail                     |
-| `--show-full-response` | Display entire server response payload on error         |
-| `--show-hooks`         | Print stdout/stderr from beforeRun and afterRun hooks   |
-| `--skip-hooks`         | Skip executing beforeRun and afterRun hooks             |
-
-Examples:
-
-```bash
-# Dry run to validate config
-veriflow run --dry-run
+# Run veriflow against a specific config
+veriflow run --config veriflow-configs/seeding-flows.json
 
 # Override base URL
 veriflow run --base-url http://staging.example.com

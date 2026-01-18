@@ -25,7 +25,6 @@ func SetupRunCommands(rootCmd *cobra.Command) {
 }
 
 type runRootFlags struct {
-	DryRun           bool
 	BaseUrlOverride  string
 	ShowFullResponse bool
 	Skips            []string
@@ -46,10 +45,18 @@ func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [OPTIONS] [TARGET...]",
 		Short: "Runs the testing engine against the configuration file",
-		Long:  ``,
+		Long: `Execute test flows defined in veriflow.json.
+
+Targets can be flow names or flow/step pairs:
+  veriflow run                          Run all flows
+  veriflow run user-onboarding          Run a specific flow
+  veriflow run user-onboarding/login    Run a specific step
+  veriflow run flow1 flow2/step1        Run multiple targets
+
+Hooks (beforeRun/afterRun) execute automatically unless --skip-hooks is set.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			assertionFailuresHappened, err := rootCmd(rootFlags, args)
-			cli.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err)
 
 			if assertionFailuresHappened {
 				return &RunAssertionError{} // Signal that we should exit with 1.
@@ -61,7 +68,6 @@ func newRootCmd() *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.BoolVar(&rootFlags.DryRun, "dry-run", false, "Validate and print all steps without executing")
 	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
 	flags.BoolVar(&rootFlags.ShowFullResponse, "show-full-response", false, "Display entire server response payload on error")
 	flags.StringArrayVar(&rootFlags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
@@ -192,7 +198,6 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 
 	runnerConfig := engine.RunnerSettings{
 		Cfg:             cfg,
-		DryRun:          rootFlags.DryRun,
 		BaseUrlOverride: rootFlags.BaseUrlOverride,
 	}
 	runner := engine.NewRunner(runnerConfig)

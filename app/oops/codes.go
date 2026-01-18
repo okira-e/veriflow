@@ -15,6 +15,7 @@ const (
 	UserAborted
 	OperationFailed
 	ConfigFileNotFound
+	ConfigFileExistsError
 	ErrInvalidInput
 	MissingRequiredFlag
 	AssertionExpressionParsingFailure
@@ -91,6 +92,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("OperationFailed")
 	case ConfigFileNotFound:
 		return PascalToScreamingSnake("ConfigFileNotFound")
+	case ConfigFileExistsError:
+		return PascalToScreamingSnake("ConfigFileExistsError")
 	case ErrInvalidInput:
 		return PascalToScreamingSnake("ErrInvalidInput")
 	case MissingRequiredFlag:
@@ -183,7 +186,7 @@ func (code Code) String() string {
 func (code Code) IsUserError() bool {
 	switch code {
 	case FlowNotFound, StepNotFound, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
-		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, BeforeRunFailed, AfterRunFailed, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError:
+		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigFileExistsError, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, BeforeRunFailed, AfterRunFailed, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError:
 		return true
 	}
 

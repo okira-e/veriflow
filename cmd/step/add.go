@@ -36,6 +36,8 @@ func newAddCmd() *cobra.Command {
 		Use:   "add [name]",
 		Short: "Add a new test step",
 		Long: `
+Add a new test step to a flow.
+		
 Assertions syntax:
   exists <jsonpath>
     Example: --assert "exists $.data.token"
@@ -54,7 +56,7 @@ Exports syntax:
 
 		Run: func(cmd *cobra.Command, args []string) {
 			err := runAddCmd(cmd, args, flags)
-			cli.HandleCliError(err, cliopts.Verbose)
+			cli.HandleCliError(err)
 		},
 	}
 

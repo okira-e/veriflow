@@ -13,11 +13,14 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:              "veriflow",
-	Short:            "Veriflow is a CLI tool to define and run end-to-end API test flows using a simple JSON config.",
-	SilenceUsage:     true,
-	SilenceErrors:    true,
-	Long:             ``,
+	Use:           "veriflow",
+	Short:         "Veriflow is a CLI tool to define and run end-to-end API test flows using a simple JSON config.",
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	Long: `Veriflow is a CLI tool for defining and running end-to-end API test flows.
+
+It uses a JSON configuration file (veriflow.json) to define flows, steps,
+assertions, and exports. Tests run in order, passing data between steps.`,
 	TraverseChildren: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
@@ -43,7 +46,7 @@ func init() {
 
 func Execute() {
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(newInitCmd())
 
 	flow.SetupFlowCommands(rootCmd)
 	step.SetupStepCommands(rootCmd)
@@ -55,6 +58,6 @@ func Execute() {
 			os.Exit(1)
 		}
 
-		cli.HandleCliError(err, cliopts.Verbose)
+		cli.HandleCliError(err)
 	}
 }

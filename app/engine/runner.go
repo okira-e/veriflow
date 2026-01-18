@@ -27,8 +27,6 @@ type RunnerSettings struct {
 	// The settings file for this project.
 	Cfg             *config.Cfg
 	BaseUrlOverride string
-	// DryRun makes the runner validate and print all steps without sending the requests.
-	DryRun bool
 }
 
 func (self *RunnerSettings) getBaseUrl() string {
