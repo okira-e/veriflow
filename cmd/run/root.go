@@ -20,11 +20,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const maxResponseLines = 15
+
+// Target represents a user-specified target: either a whole flow or a specific step.
+type Target struct {
+	Flow *app.Flow
+	Step *app.Step // nil means "run entire flow"
+}
+
+// StepRun is a flattened, executable unit: one step with its flow context.
+type StepRun Target
+
+// RunOptions holds all runtime configuration for executing targets.
+type RunOptions struct {
+	TrimErrorResponse   bool
+	KeepGoing           bool
+	ShowServerResponses bool
+	Printer             logging.Printer
+}
+
+// RunAssertionError signals that assertion failures occurred (for exit code 1).
+type RunAssertionError struct{}
+
+func (self *RunAssertionError) Error() string { return "" }
+
 func SetupRunCommands(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(newRootCmd())
 }
 
-type runRootFlags struct {
+type runFlags struct {
 	BaseUrlOverride       string
 	ShowFullErrorResponse bool
 	Skips                 []string
@@ -34,14 +58,8 @@ type runRootFlags struct {
 	ShowServerResponses   bool
 }
 
-type RunAssertionError struct{}
-
-func (self *RunAssertionError) Error() string {
-	return ""
-}
-
 func newRootCmd() *cobra.Command {
-	rootFlags := &runRootFlags{}
+	flags := &runFlags{}
 
 	cmd := &cobra.Command{
 		Use:   "run [OPTIONS] [TARGET...]",
@@ -56,404 +74,267 @@ Targets can be flow names or flow/step pairs:
 
 Hooks (beforeRun/afterRun) execute automatically unless --skip-hooks is set.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			assertionFailuresHappened, err := rootCmd(rootFlags, args)
+			hadFailures, err := runCommand(flags, args)
 			cli.HandleCliError(err)
 
-			if assertionFailuresHappened {
-				return &RunAssertionError{} // Signal that we should exit with 1.
+			if hadFailures {
+				return &RunAssertionError{}
 			}
-
 			return nil
 		},
 	}
 
-	flags := cmd.Flags()
-
-	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
-	flags.BoolVar(&rootFlags.ShowFullErrorResponse, "show-full-error-response", false, "Display entire server response payload on error")
-	flags.StringArrayVar(&rootFlags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
-	flags.BoolVar(&rootFlags.KeepGoing, "keep-going", false, "Continue running tests even if some fail")
-	flags.BoolVar(&rootFlags.ShowHooks, "show-hooks", false, "Print stdout and stderr from runBefore and runAfter shell commands")
-	flags.BoolVar(&rootFlags.SkipHooks, "skip-hooks", false, "Skip executing runBefore and runAfter shell commands")
-	flags.BoolVar(&rootFlags.ShowServerResponses, "show-server-responses", false, "View responses sent from the server on every request")
+	f := cmd.Flags()
+	f.StringVar(&flags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
+	f.BoolVar(&flags.ShowFullErrorResponse, "show-full-error-response", false, "Display entire server response payload on error")
+	f.StringArrayVar(&flags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
+	f.BoolVar(&flags.KeepGoing, "keep-going", false, "Continue running tests even if some fail")
+	f.BoolVar(&flags.ShowHooks, "show-hooks", false, "Print stdout and stderr from runBefore and runAfter shell commands")
+	f.BoolVar(&flags.SkipHooks, "skip-hooks", false, "Skip executing runBefore and runAfter shell commands")
+	f.BoolVar(&flags.ShowServerResponses, "show-server-responses", false, "View responses sent from the server on every request")
 
 	return cmd
 }
 
-// rootCmd starts the `run` command and returns if an assertion failure has happened as well as
-// an error
-func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
+// runCommand is the entry point for the run command.
+// Returns (hadFailures, error) where hadFailures indicates assertion failures occurred.
+func runCommand(flags *runFlags, args []string) (bool, error) {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return false, err
 	}
 
-	targets := []Target{}
-
-	//
-	// Conditionally choose which flows/steps to run
-	//
-
-	if len(args) > 0 {
-		for _, arg := range args {
-			if arg[0] == '/' {
-				msg := fmt.Sprintf("invalid target \"%s\"", arg)
-				return false, oops.Err(oops.InvalidTarget, msg, nil)
-			}
-			if arg[len(arg)-1] == '/' {
-				arg = arg[:len(arg)-1]
-			}
-			if strings.Contains(arg, "/") {
-				flowName := strings.Split(arg, "/")[0]
-				stepName := strings.Split(arg, "/")[1]
-
-				flow, ok := cfg.GetFlow(flowName)
-				if !ok {
-					msg := fmt.Sprintf("flow \"%s\" doesn't exist", flowName)
-					return false, oops.Err(oops.FlowNotFound, msg, nil)
-				}
-
-				step, ok := flow.GetStep(stepName)
-				if !ok {
-					msg := fmt.Sprintf("step \"%s\" doesn't exist on flow \"%s\"", stepName, flowName)
-					return false, oops.Err(oops.StepNotFound, msg, nil)
-				}
-
-				targets = append(targets, Target{Flow: flow, Step: step})
-			} else {
-				flow, ok := cfg.GetFlow(arg)
-				if !ok {
-					msg := fmt.Sprintf("flow \"%s\" doesn't exist", arg)
-					return false, oops.Err(oops.FlowNotFound, msg, nil)
-				}
-
-				targets = append(targets, Target{Flow: flow, Step: nil})
-			}
-		}
-	} else {
-		for _, flow := range cfg.Flows {
-			targets = append(targets, Target{Flow: flow, Step: nil})
-		}
+	targets, err := parseTargets(cfg, args)
+	if err != nil {
+		return false, err
 	}
 
-	//
-	// Collect steps to be skipped.
-	//
-
-	targetsToSkip := []Target{}
-	for _, skip := range rootFlags.Skips {
-		if strings.Contains(skip, "/") {
-			flowName := strings.Split(skip, "/")[0]
-			stepName := strings.Split(skip, "/")[1]
-
-			flow, ok := cfg.GetFlow(flowName)
-			if !ok {
-				msg := fmt.Sprintf("flow \"%s\" doesn't exist", flowName)
-				return false, oops.Err(oops.FlowNotFound, msg, nil)
-			}
-
-			step, ok := flow.GetStep(stepName)
-			if !ok {
-				msg := fmt.Sprintf("step \"%s\" doesn't exist on flow \"%s\"", stepName, flowName)
-				return false, oops.Err(oops.StepNotFound, msg, nil)
-			}
-
-			targetsToSkip = append(targetsToSkip, Target{Flow: flow, Step: step})
-		} else { // Skipping an entire flow
-			flowName := skip
-
-			flow, ok := cfg.GetFlow(flowName)
-			if !ok {
-				msg := fmt.Sprintf("skipped flow \"%s\" doesn't exist", flowName)
-				return false, oops.Err(oops.FlowNotFound, msg, nil)
-			}
-
-			for _, step := range flow.Steps {
-				targetsToSkip = append(targetsToSkip, Target{Flow: flow, Step: step})
-			}
-		}
+	skips, err := parseSkips(cfg, flags.Skips)
+	if err != nil {
+		return false, err
 	}
 
-	///
-	// Run and print the pre/post run hooks if not skipped
-	//
+	stepsToRun := flattenTargets(targets, skips)
 
-	if !rootFlags.SkipHooks {
-		var printer logging.Printer
-		if cliopts.JSONOutput {
-			printer = logging.NullPrinter{}
-		} else {
-			printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-		}
-
-		beforeRunHooksExist := len(cfg.BeforeRun) > 0
-		afterRunHooksExist := len(cfg.AfterRun) > 0
-
-		if beforeRunHooksExist {
-			printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
-			if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
+	// Run hooks
+	if !flags.SkipHooks {
+		if len(cfg.BeforeRun) > 0 {
+			if err := runBeforeHooks(cfg, flags.ShowHooks); err != nil {
 				return false, err
 			}
 		}
-		if afterRunHooksExist {
-			defer afterRunCommands(cfg, rootFlags.ShowHooks)
-			defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
+		if len(cfg.AfterRun) > 0 {
+			defer runAfterHooks(cfg, flags.ShowHooks)
 		}
 	}
 
-	//
-	// Run the steps
-	//
-
-	runnerConfig := engine.RunnerSettings{
+	// Execute
+	runner := engine.NewRunner(engine.RunnerSettings{
 		Cfg:             cfg,
-		BaseUrlOverride: rootFlags.BaseUrlOverride,
+		BaseUrlOverride: flags.BaseUrlOverride,
+	})
+
+	opts := RunOptions{
+		TrimErrorResponse:   !flags.ShowFullErrorResponse,
+		KeepGoing:           flags.KeepGoing,
+		ShowServerResponses: flags.ShowServerResponses,
+		Printer:             makePrinter(),
 	}
-	runner := engine.NewRunner(runnerConfig)
 
 	start := time.Now()
-	failures, err := runTargets(
-		runner,
-		targets,
-		targetsToSkip,
-		!cliopts.JSONOutput,
-		!rootFlags.ShowFullErrorResponse,
-		rootFlags.KeepGoing,
-		rootFlags.ShowServerResponses,
-	)
-	if err != nil {
-		return false, err // This is a program error and not an assertion failure.
-	}
+	failures, err := executeSteps(runner, stepsToRun, opts)
 	elapsed := time.Since(start)
 
-	if cliopts.JSONOutput {
-		reportJSON(
-			failures == 0,
-			elapsed,
-			runner.StepsRan(),
-			runner.TotalSteps(),
-			!rootFlags.SkipHooks,
-		)
-	} else {
-		report(
-			failures == 0,
-			elapsed,
-			runner.StepsRan(),
-			runner.TotalSteps(),
-		)
+	if err != nil {
+		return false, err
 	}
 
-	return failures != 0, nil
+	// Report results
+	if cliopts.JSONOutput {
+		reportJSON(failures == 0, elapsed, runner.StepsRan(), runner.TotalSteps(), !flags.SkipHooks)
+	} else {
+		report(failures == 0, elapsed, runner.StepsRan(), runner.TotalSteps())
+	}
+
+	return failures > 0, nil
 }
 
-func runTargets(
-	runner *engine.Runner,
-	targets []Target,
-	targetsToSkip []Target,
-	logText bool,
-	trimResponse bool,
-	keepGoing bool,
-	showServerResponses bool,
-) (int, error) {
-	failures := 0
-
-	// Conditionally assign a NullPritner so that printing doesn't happen with if-else hell.
-	var printer logging.Printer
-	if logText {
-		printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-	} else {
-		printer = logging.NullPrinter{}
+// parseTargets converts CLI args into Target structs.
+// Empty args means "run all flows".
+func parseTargets(cfg *config.Cfg, args []string) ([]Target, error) {
+	if len(args) == 0 {
+		targets := make([]Target, len(cfg.Flows))
+		for i, flow := range cfg.Flows {
+			targets[i] = Target{Flow: flow, Step: nil}
+		}
+		return targets, nil
 	}
 
-	for _, target := range targets {
-		// Run a single step.
-		if target.Step != nil {
-			// @Dupe
-			step := target.Step
-			if includesFullTarget(targetsToSkip, target) {
-				continue
+	targets := make([]Target, 0, len(args))
+	for _, arg := range args {
+		target, err := parseTarget(cfg, arg)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+// parseTarget parses a single target string like "flow" or "flow/step".
+func parseTarget(cfg *config.Cfg, arg string) (Target, error) {
+	if len(arg) == 0 {
+		return Target{}, oops.Err(oops.InvalidTarget, "empty target", nil)
+	}
+	if arg[0] == '/' {
+		return Target{}, oops.Err(oops.InvalidTarget, fmt.Sprintf("invalid target %q", arg), nil)
+	}
+
+	arg = strings.TrimSuffix(arg, "/")
+
+	if !strings.Contains(arg, "/") {
+		// Whole flow
+		flow, ok := cfg.GetFlow(arg)
+		if !ok {
+			return Target{}, oops.Err(oops.FlowNotFound, fmt.Sprintf("flow %q doesn't exist", arg), nil)
+		}
+		return Target{Flow: flow, Step: nil}, nil
+	}
+
+	// Specific step
+	parts := strings.SplitN(arg, "/", 2)
+	flowName, stepName := parts[0], parts[1]
+
+	flow, ok := cfg.GetFlow(flowName)
+	if !ok {
+		return Target{}, oops.Err(oops.FlowNotFound, fmt.Sprintf("flow %q doesn't exist", flowName), nil)
+	}
+
+	step, ok := flow.GetStep(stepName)
+	if !ok {
+		return Target{}, oops.Err(oops.StepNotFound, fmt.Sprintf("step %q doesn't exist on flow %q", stepName, flowName), nil)
+	}
+
+	return Target{Flow: flow, Step: step}, nil
+}
+
+// parseSkips converts skip args into a set of StepRun for fast lookup.
+func parseSkips(cfg *config.Cfg, skipArgs []string) (map[string]bool, error) {
+	skips := make(map[string]bool)
+
+	for _, skip := range skipArgs {
+		target, err := parseTarget(cfg, skip)
+		if err != nil {
+			// Adjust error message for skips
+			if strings.Contains(err.Error(), "doesn't exist") {
+				return nil, oops.Err(oops.FlowNotFound, fmt.Sprintf("skipped %s", err.Error()), nil)
 			}
-			printer.Styled(logging.Info, logging.Grey, "Running ", false)
-			msg := fmt.Sprintf("%s...", step.Name)
-			printer.Print(logging.Info, msg)
-			resp, err := runner.Execute(step)
-			if err != nil {
-				isAssertionFailure := false
-				// Count this as one of the failures if it is an assertion failure.
-				var assertionFailure *engine.AssertionFailure
-				if errors.As(err, &assertionFailure) {
-					failures += 1
-					isAssertionFailure = true
-				}
+			return nil, err
+		}
 
-				printer.Styled(logging.Info, logging.Red, "FAILED", true)
+		if target.Step != nil {
+			// Skip specific step
+			skips[stepKey(target.Flow.Name, target.Step.Name)] = true
+		} else {
+			// Skip entire flow
+			for _, step := range target.Flow.Steps {
+				skips[stepKey(target.Flow.Name, step.Name)] = true
+			}
+		}
+	}
 
-				if !keepGoing {
-					// Report the error through the engine if it's an assertion failure.
-					if isAssertionFailure {
-						reportAssertionFailure(assertionFailure, trimResponse)
-						return failures, nil
-					} else {
-						return failures, err // Return any other error that's not an assertion failure
-					}
-				}
-			} else {
-				if showServerResponses {
-					printServerResponseForSuccess(resp, printer)
-				}
-				printer.Styled(logging.Info, logging.Green, "OK", true)
+	return skips, nil
+}
+
+// flattenTargets expands targets into individual StepRuns, excluding skipped ones.
+func flattenTargets(targets []Target, skips map[string]bool) []StepRun {
+	var runs []StepRun
+
+	for _, t := range targets {
+		if t.Step != nil {
+			// Single step target
+			if !skips[stepKey(t.Flow.Name, t.Step.Name)] {
+				runs = append(runs, StepRun{Flow: t.Flow, Step: t.Step})
 			}
 		} else {
-			// @Dupe
-			// Run a complete flow
-			for _, step := range target.Flow.Steps {
-				if includesFullTarget(targetsToSkip, Target{Flow: target.Flow, Step: step}) {
-					continue
-				}
-				printer.Styled(logging.Info, logging.Grey, "Running ", false)
-				msg := fmt.Sprintf("%s/%s...", target.Flow.Name, step.Name)
-				printer.Print(logging.Info, msg)
-				resp, err := runner.Execute(step)
-				if err != nil {
-					isAssertionFailure := false
-					// Count this as one of the failures if it is an assertion failure.
-					var assertionFailure *engine.AssertionFailure
-					if errors.As(err, &assertionFailure) {
-						failures += 1
-						isAssertionFailure = true
-					}
-
-					printer.Styled(logging.Info, logging.Red, "FAILED", true)
-
-					if !keepGoing {
-						// Report the error through the engine if it's an assertion failure.
-						if isAssertionFailure {
-							assertionFailure.Flow = target.Flow // Flag the step that failed if the error is an ExecutionError.
-							reportAssertionFailure(assertionFailure, trimResponse)
-							return failures, nil
-						} else {
-							return failures, err // Return any other error that's not an assertion failure
-						}
-					}
-				} else {
-					if showServerResponses {
-						printServerResponseForSuccess(resp, printer)
-					}
-					printer.Styled(logging.Info, logging.Green, "OK", true)
+			// Entire flow
+			for _, step := range t.Flow.Steps {
+				if !skips[stepKey(t.Flow.Name, step.Name)] {
+					runs = append(runs, StepRun{Flow: t.Flow, Step: step})
 				}
 			}
+		}
+	}
+
+	return runs
+}
+
+func stepKey(flowName, stepName string) string {
+	return flowName + "/" + stepName
+}
+
+// executeSteps runs all steps, knows to print them, and returns the failure count.
+func executeSteps(runner *engine.Runner, steps []StepRun, opts RunOptions) (int, error) {
+	failures := 0
+
+	for _, sr := range steps {
+		opts.Printer.Styled(logging.Info, logging.Grey, "Running ", false)
+		opts.Printer.Print(logging.Info, fmt.Sprintf("%s/%s...", sr.Flow.Name, sr.Step.Name))
+
+		resp, err := runner.Execute(sr.Step)
+
+		if err != nil {
+			var af *engine.AssertionFailure
+			isAssertionFailure := errors.As(err, &af)
+
+			if isAssertionFailure {
+				failures++
+				af.Flow = sr.Flow
+			}
+
+			opts.Printer.Styled(logging.Info, logging.Red, "FAILED", true)
+
+			if !opts.KeepGoing {
+				if isAssertionFailure {
+					reportAssertionFailure(af, opts.TrimErrorResponse)
+					return failures, nil
+				}
+				return failures, err
+			}
+		} else {
+			if opts.ShowServerResponses {
+				printServerResponse(resp, opts.Printer)
+			}
+			opts.Printer.Styled(logging.Info, logging.Green, "OK", true)
 		}
 	}
 
 	return failures, nil
 }
 
-func reportAssertionFailure(assertionFailure *engine.AssertionFailure, trimResponse bool) {
-	if cliopts.JSONOutput {
-		return
-	}
-
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-
-	printer.Styled(logging.Info, logging.Grey, "Step: ", false)
-
-	flowName := "---"
-	if assertionFailure.Flow != nil {
-		flowName = assertionFailure.Flow.Name
-	}
-	stepMsg := fmt.Sprintf("%s/%s", flowName, assertionFailure.Step.Name)
-	printer.Print(logging.Info, stepMsg)
-
-	printer.Styled(logging.Info, logging.Normal, " FAILED.\n", false)
-
-	printer.Styled(logging.Info, logging.Grey, "Cause: ", false)
-	causeMsg := fmt.Sprintf("%s\n", assertionFailure.Err.RootCause().Error())
-	printer.Print(logging.Info, causeMsg)
-
-	if len(assertionFailure.Response) != 0 {
-		if pretty, err := utils.PrettyJson(assertionFailure.Response); err == nil {
-			lines := strings.Split(pretty, "\n")
-			if trimResponse && len(lines) > 15 {
-				lines = lines[:15]
-			}
-
-			printer.Styled(logging.Info, logging.Grey, "Server Response:\n", false)
-			printer.Println(logging.Info, strings.Join(lines, "\n"))
+func runBeforeHooks(cfg *config.Cfg, showOutput bool) error {
+	printer := makePrinter()
+	printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
+	for _, cmd := range cfg.BeforeRun {
+		if err := shellExec(cmd, !showOutput); err != nil {
+			return oops.Err(oops.BeforeRunFailed, "beforeRun command failed", err)
 		}
 	}
+	return nil
 }
 
-// @TODO: Figure out how to report individual step error when not --keep-going with reportJSON happening.
-func reportAssertionFailureJSON(assertionFailure *engine.AssertionFailure) {
-	printer := logging.NewJSONPrinter(cliopts.Silent)
-
-	flowName := "---"
-	if assertionFailure.Flow != nil {
-		flowName = assertionFailure.Flow.Name
-	}
-
-	result := map[string]any{
-		"flow":  flowName,
-		"step":  assertionFailure.Step.Name,
-		"error": assertionFailure.Err.RootCause().Error(),
-		"code":  oops.StepRequestAssertionFailed.String(),
-	}
-
-	printer.PrintStructured(result)
-}
-
-func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-
-	timeTookMsg := fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed))
-	printer.Println(logging.Info, timeTookMsg)
-	ranMsg := fmt.Sprintf("Ran %d/%d tests.", stepsRan, totalSteps)
-	printer.Println(logging.Info, ranMsg)
-
-	if success {
-		printer.Styled(logging.Info, logging.Green, "All tests passed.", true)
-	} else {
-		printer.Styled(logging.Info, logging.Red, "Some tests have failed", true)
+func runAfterHooks(cfg *config.Cfg, showOutput bool) {
+	printer := makePrinter()
+	printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
+	for _, cmd := range cfg.AfterRun {
+		_ = shellExec(cmd, !showOutput) // Best effort
 	}
 }
 
-func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int, ranHooks bool) {
-	printer := logging.NewJSONPrinter(cliopts.Silent)
-
-	result := map[string]any{
-		"took":     utils.FormatDuration(elapsed),
-		"success":  success,
-		"ran":      stepsRan,
-		"ranHooks": ranHooks,
-		"total":    totalSteps,
-	}
-
-	printer.PrintStructured(result)
-}
-
-type Target struct {
-	Flow *app.Flow
-	Step *app.Step
-}
-
-// includesFullTarget assumes that both flow and step are not nil
-func includesFullTarget(targets []Target, target Target) bool {
-	for _, t := range targets {
-		if target.Flow.Name == t.Flow.Name && target.Step.Name == t.Step.Name {
-			return true
-		}
-	}
-
-	return false
-}
-
-func execute(cmd string, silent bool) error {
-	shell := "sh"
-	args := []string{"-c", cmd}
-
+func shellExec(cmd string, silent bool) error {
+	shell, args := "sh", []string{"-c", cmd}
 	if runtime.GOOS == "windows" {
-		shell = "cmd"
-		args = []string{"/C", cmd}
+		shell, args = "cmd", []string{"/C", cmd}
 	}
 
 	c := exec.Command(shell, args...)
@@ -466,25 +347,69 @@ func execute(cmd string, silent bool) error {
 	return c.Run()
 }
 
-func beforeRunCommands(cfg *config.Cfg, showOutput bool) error {
-	for _, cmd := range cfg.BeforeRun {
-		if err := execute(cmd, !showOutput); err != nil {
-			return oops.Err(oops.BeforeRunFailed, "beforeRun command failed", err)
-		}
+func makePrinter() logging.Printer {
+	if cliopts.JSONOutput {
+		return logging.NullPrinter{}
 	}
-	return nil
+	return logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 }
 
-func afterRunCommands(cfg *config.Cfg, showOutput bool) error {
-	for _, cmd := range cfg.AfterRun {
-		if err := execute(cmd, !showOutput); err != nil {
-			return oops.Err(oops.AfterRunFailed, "afterRun command failed", err)
-		}
+func report(success bool, elapsed time.Duration, stepsRan, totalSteps int) {
+	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+
+	printer.Println(logging.Info, fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed)))
+	printer.Println(logging.Info, fmt.Sprintf("Ran %d/%d tests.", stepsRan, totalSteps))
+
+	if success {
+		printer.Styled(logging.Info, logging.Green, "All tests passed.", true)
+	} else {
+		printer.Styled(logging.Info, logging.Red, "Some tests have failed", true)
 	}
-	return nil
 }
 
-func printServerResponseForSuccess(body []byte, printer logging.Printer) {
+func reportJSON(success bool, elapsed time.Duration, stepsRan, totalSteps int, ranHooks bool) {
+	printer := logging.NewJSONPrinter(cliopts.Silent)
+	printer.PrintStructured(map[string]any{
+		"took":     utils.FormatDuration(elapsed),
+		"success":  success,
+		"ran":      stepsRan,
+		"ranHooks": ranHooks,
+		"total":    totalSteps,
+	})
+}
+
+func reportAssertionFailure(af *engine.AssertionFailure, trimResponse bool) {
+	if cliopts.JSONOutput {
+		return
+	}
+
+	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+
+	flowName := "---"
+	if af.Flow != nil {
+		flowName = af.Flow.Name
+	}
+
+	printer.Styled(logging.Info, logging.Grey, "Step: ", false)
+	printer.Print(logging.Info, fmt.Sprintf("%s/%s", flowName, af.Step.Name))
+	printer.Styled(logging.Info, logging.Normal, " FAILED.\n", false)
+
+	printer.Styled(logging.Info, logging.Grey, "Cause: ", false)
+	printer.Print(logging.Info, af.Err.RootCause().Error()+"\n")
+
+	if len(af.Response) > 0 {
+		if pretty, err := utils.PrettyJson(af.Response); err == nil {
+			lines := strings.Split(pretty, "\n")
+			if trimResponse && len(lines) > maxResponseLines {
+				lines = lines[:maxResponseLines]
+			}
+			printer.Styled(logging.Info, logging.Grey, "Server Response:\n", false)
+			printer.Println(logging.Info, strings.Join(lines, "\n"))
+		}
+	}
+}
+
+func printServerResponse(body []byte, printer logging.Printer) {
 	if pretty, err := utils.PrettyJson(body); err == nil {
 		printer.Styled(logging.Info, logging.Grey, "\nResponse: ", false)
 		printer.Print(logging.Info, pretty+"\n")
