@@ -80,7 +80,7 @@ func TestIntegration_DeepExportChain(t *testing.T) {
 	}
 
 	for i, step := range steps {
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %d (%s) failed: %v", i+1, step.Name, err)
 		}
 	}
@@ -224,7 +224,7 @@ func TestIntegration_CompleteUserJourney(t *testing.T) {
 	}
 
 	for _, step := range flow {
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %s failed: %v", step.Name, err)
 		}
 	}
@@ -290,7 +290,7 @@ func TestIntegration_AssertionFailureMidFlow(t *testing.T) {
 
 	var failedStep *app.Step
 	for _, step := range steps {
-		err := runner.Execute(step)
+		_, err := runner.Execute(step)
 		if err != nil {
 			failedStep = step
 			// Verify it's an assertion failure with response body
@@ -349,11 +349,11 @@ func TestIntegration_ExportFailureMidFlow(t *testing.T) {
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"missing": "$.expected.deeply.nested.path"}) // Will fail
 
-	if err := runner.Execute(step1); err != nil {
+	if _, err := runner.Execute(step1); err != nil {
 		t.Fatalf("step1 should succeed: %v", err)
 	}
 
-	err := runner.Execute(step2)
+	_, err := runner.Execute(step2)
 	if err == nil {
 		t.Fatal("step2 should fail due to bad export path")
 	}
@@ -432,7 +432,7 @@ func TestIntegration_CookiePersistenceAcrossEndpoints(t *testing.T) {
 	}
 
 	for _, step := range steps {
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %s failed: %v", step.Name, err)
 		}
 	}
@@ -525,7 +525,7 @@ func TestIntegration_ComplexNestedDataFlow(t *testing.T) {
 	}
 
 	for _, step := range steps {
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %s failed: %v", step.Name, err)
 		}
 	}
@@ -599,7 +599,7 @@ func TestIntegration_PaginationPattern(t *testing.T) {
 		app.Exports{})
 
 	for _, step := range []*app.Step{page1, page2, page3} {
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %s failed: %v", step.Name, err)
 		}
 	}
@@ -637,7 +637,7 @@ func TestIntegration_LongFlowStability(t *testing.T) {
 			app.Exports{exportKey: "$.value"},
 		)
 
-		if err := runner.Execute(step); err != nil {
+		if _, err := runner.Execute(step); err != nil {
 			t.Fatalf("step %d failed: %v", i, err)
 		}
 	}
@@ -655,7 +655,7 @@ func TestIntegration_LongFlowStability(t *testing.T) {
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{})
 
-	if err := runner.Execute(finalStep); err != nil {
+	if _, err := runner.Execute(finalStep); err != nil {
 		t.Fatalf("final step failed: %v", err)
 	}
 }

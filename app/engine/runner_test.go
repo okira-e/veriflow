@@ -38,7 +38,7 @@ func TestRunner_BasicExecution(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -80,7 +80,7 @@ func TestRunner_BaseUrlOverride(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -114,7 +114,7 @@ func TestRunner_BuiltInBindings(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -173,7 +173,7 @@ func TestRunner_ExportsAndBindings(t *testing.T) {
 		},
 	)
 
-	err := runner.Execute(step1)
+	_, err := runner.Execute(step1)
 	if err != nil {
 		t.Fatalf("step1 failed: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestRunner_ExportsAndBindings(t *testing.T) {
 		app.Exports{},
 	)
 
-	err = runner.Execute(step2)
+	_, err = runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("step2 failed: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestRunner_DynamicPathBinding(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step2)
+	_, err := runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("step2 failed: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestRunner_NestedExports(t *testing.T) {
 		},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -285,7 +285,7 @@ func TestRunner_NestedExports(t *testing.T) {
 	)
 
 	// If the binding resolves correctly, the export worked
-	err = runner.Execute(step2)
+	_, err = runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("expected binding to resolve, got %v", err)
 	}
@@ -316,7 +316,7 @@ func TestRunner_AssertionFailure(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err == nil {
 		t.Fatal("expected assertion failure, got nil")
 	}
@@ -351,7 +351,7 @@ func TestRunner_StatusCodeMismatch(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err == nil {
 		t.Fatal("expected error for status mismatch, got nil")
 	}
@@ -379,7 +379,7 @@ func TestRunner_Timeout(t *testing.T) {
 	)
 	step.Options.Timeout = Some("50ms")
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
@@ -428,7 +428,7 @@ func TestRunner_NestedBodyBinding(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step2)
+	_, err := runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -481,7 +481,7 @@ func TestRunner_ArrayBinding(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step2)
+	_, err := runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -535,7 +535,7 @@ func TestRunner_BindingInAssertion(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step2)
+	_, err := runner.Execute(step2)
 	if err != nil {
 		t.Fatalf("expected no error with matching assertion, got %v", err)
 	}
@@ -562,7 +562,7 @@ func TestRunner_MultipleHTTPMethods(t *testing.T) {
 			app.Exports{},
 		)
 
-		err := runner.Execute(step)
+		_, err := runner.Execute(step)
 		if err != nil {
 			t.Fatalf("method %s failed: %v", method, err)
 		}
@@ -619,7 +619,7 @@ func TestRunner_EmptyResponseBody(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error with empty body, got %v", err)
 	}
@@ -643,7 +643,7 @@ func TestRunner_ExportFailure(t *testing.T) {
 		},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err == nil {
 		t.Fatal("expected error for failed export, got nil")
 	}
@@ -677,7 +677,7 @@ func TestRunner_UnresolvedBinding(t *testing.T) {
 		app.Exports{},
 	)
 
-	err := runner.Execute(step)
+	_, err := runner.Execute(step)
 	if err != nil {
 		t.Fatalf("expected no error (unresolved stays as-is), got %v", err)
 	}

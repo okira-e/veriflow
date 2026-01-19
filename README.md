@@ -250,14 +250,15 @@ veriflow init --base-url "https://base.com" --non-interactive
 
 Run flows defined in the configuration.
 
-| Flag                   | Description                                           |
-| ---------------------- | ----------------------------------------------------- |
-| `--base-url`           | Override the baseUrl from config                      |
-| `--skip`               | Skip specific flows or steps (repeatable)             |
-| `--keep-going`         | Continue running even if tests fail                   |
-| `--show-full-response` | Display entire server response payload on error       |
-| `--show-hooks`         | Print stdout/stderr from beforeRun and afterRun hooks |
-| `--skip-hooks`         | Skip executing beforeRun and afterRun hooks           |
+| Flag                         | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `--base-url`                 | Override the baseUrl from config                      |
+| `--skip`                     | Skip specific flows or steps (repeatable)             |
+| `--keep-going`               | Continue running even if tests fail                   |
+| `--show-full-error-response` | Display entire server response payload on error       |
+| `--show-hooks`               | Print stdout/stderr from beforeRun and afterRun hooks |
+| `--skip-hooks`               | Skip executing beforeRun and afterRun hooks           |
+| `--show-server-responses`    | View responses sent from the server on every request  |
 
 Examples:
 

@@ -25,12 +25,13 @@ func SetupRunCommands(rootCmd *cobra.Command) {
 }
 
 type runRootFlags struct {
-	BaseUrlOverride  string
-	ShowFullResponse bool
-	Skips            []string
-	KeepGoing        bool
-	ShowHooks        bool
-	SkipHooks        bool
+	BaseUrlOverride       string
+	ShowFullErrorResponse bool
+	Skips                 []string
+	KeepGoing             bool
+	ShowHooks             bool
+	SkipHooks             bool
+	ShowServerResponses   bool
 }
 
 type RunAssertionError struct{}
@@ -69,11 +70,12 @@ Hooks (beforeRun/afterRun) execute automatically unless --skip-hooks is set.`,
 	flags := cmd.Flags()
 
 	flags.StringVar(&rootFlags.BaseUrlOverride, "base-url", "", "Override the base URL in the config")
-	flags.BoolVar(&rootFlags.ShowFullResponse, "show-full-response", false, "Display entire server response payload on error")
+	flags.BoolVar(&rootFlags.ShowFullErrorResponse, "show-full-error-response", false, "Display entire server response payload on error")
 	flags.StringArrayVar(&rootFlags.Skips, "skip", []string{}, "Flows/steps to skip for this run")
 	flags.BoolVar(&rootFlags.KeepGoing, "keep-going", false, "Continue running tests even if some fail")
 	flags.BoolVar(&rootFlags.ShowHooks, "show-hooks", false, "Print stdout and stderr from runBefore and runAfter shell commands")
 	flags.BoolVar(&rootFlags.SkipHooks, "skip-hooks", false, "Skip executing runBefore and runAfter shell commands")
+	flags.BoolVar(&rootFlags.ShowServerResponses, "show-server-responses", false, "View responses sent from the server on every request")
 
 	return cmd
 }
@@ -84,33 +86,6 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 	cfg, err := config.LoadConfig(cliopts.ConfigFile)
 	if err != nil {
 		return false, err
-	}
-
-	///
-	// Run and print the pre/post run hooks if not skipped
-	//
-
-	if !rootFlags.SkipHooks {
-		var printer logging.Printer
-		if cliopts.JSONOutput {
-			printer = logging.NullPrinter{}
-		} else {
-			printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
-		}
-
-		beforeRunHooksExist := len(cfg.BeforeRun) > 0
-		afterRunHooksExist := len(cfg.AfterRun) > 0
-
-		if beforeRunHooksExist {
-			printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
-			if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
-				return false, err
-			}
-		}
-		if afterRunHooksExist {
-			defer afterRunCommands(cfg, rootFlags.ShowHooks)
-			defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
-		}
 	}
 
 	targets := []Target{}
@@ -199,6 +174,33 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		}
 	}
 
+	///
+	// Run and print the pre/post run hooks if not skipped
+	//
+
+	if !rootFlags.SkipHooks {
+		var printer logging.Printer
+		if cliopts.JSONOutput {
+			printer = logging.NullPrinter{}
+		} else {
+			printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+		}
+
+		beforeRunHooksExist := len(cfg.BeforeRun) > 0
+		afterRunHooksExist := len(cfg.AfterRun) > 0
+
+		if beforeRunHooksExist {
+			printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
+			if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
+				return false, err
+			}
+		}
+		if afterRunHooksExist {
+			defer afterRunCommands(cfg, rootFlags.ShowHooks)
+			defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
+		}
+	}
+
 	//
 	// Run the steps
 	//
@@ -215,8 +217,9 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 		targets,
 		targetsToSkip,
 		!cliopts.JSONOutput,
-		!rootFlags.ShowFullResponse,
+		!rootFlags.ShowFullErrorResponse,
 		rootFlags.KeepGoing,
+		rootFlags.ShowServerResponses,
 	)
 	if err != nil {
 		return false, err // This is a program error and not an assertion failure.
@@ -250,6 +253,7 @@ func runTargets(
 	logText bool,
 	trimResponse bool,
 	keepGoing bool,
+	showServerResponses bool,
 ) (int, error) {
 	failures := 0
 
@@ -272,7 +276,7 @@ func runTargets(
 			printer.Styled(logging.Info, logging.Grey, "Running ", false)
 			msg := fmt.Sprintf("%s...", step.Name)
 			printer.Print(logging.Info, msg)
-			err := runner.Execute(step)
+			resp, err := runner.Execute(step)
 			if err != nil {
 				isAssertionFailure := false
 				// Count this as one of the failures if it is an assertion failure.
@@ -294,6 +298,9 @@ func runTargets(
 					}
 				}
 			} else {
+				if showServerResponses {
+					printServerResponseForSuccess(resp, printer)
+				}
 				printer.Styled(logging.Info, logging.Green, "OK", true)
 			}
 		} else {
@@ -306,7 +313,7 @@ func runTargets(
 				printer.Styled(logging.Info, logging.Grey, "Running ", false)
 				msg := fmt.Sprintf("%s/%s...", target.Flow.Name, step.Name)
 				printer.Print(logging.Info, msg)
-				err := runner.Execute(step)
+				resp, err := runner.Execute(step)
 				if err != nil {
 					isAssertionFailure := false
 					// Count this as one of the failures if it is an assertion failure.
@@ -329,6 +336,9 @@ func runTargets(
 						}
 					}
 				} else {
+					if showServerResponses {
+						printServerResponseForSuccess(resp, printer)
+					}
 					printer.Styled(logging.Info, logging.Green, "OK", true)
 				}
 			}
@@ -472,4 +482,11 @@ func afterRunCommands(cfg *config.Cfg, showOutput bool) error {
 		}
 	}
 	return nil
+}
+
+func printServerResponseForSuccess(body []byte, printer logging.Printer) {
+	if pretty, err := utils.PrettyJson(body); err == nil {
+		printer.Styled(logging.Info, logging.Grey, "\nResponse: ", false)
+		printer.Print(logging.Info, pretty+"\n")
+	}
 }

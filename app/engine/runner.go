@@ -68,14 +68,14 @@ func NewRunner(settings RunnerSettings) *Runner {
 // Execute a step.
 //
 // Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
-func (self *Runner) Execute(step *app.Step) error {
+func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	baseCtx := context.Background()
 	timeout := 30 * time.Second // have a default
 	if step.Options.Timeout.IsSome() {
 		var err error
 		timeout, err = utils.ToDuration(step.Options.Timeout.Unwrap())
 		if err != nil {
-			return oops.Err(oops.StepRequestProcessingFailed, "failed to parse timeout duration for step", err)
+			return []byte{}, oops.Err(oops.StepRequestProcessingFailed, "failed to parse timeout duration for step", err)
 		}
 	}
 
@@ -91,7 +91,7 @@ func (self *Runner) Execute(step *app.Step) error {
 		payload := step.Request.Json.Unwrap()
 		b, err := json.Marshal(payload)
 		if err != nil {
-			return oops.Err(oops.StepRequestBuildFailed, "failed to marshal JSON body", err)
+			return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to marshal JSON body", err)
 		}
 
 		body = bytes.NewReader(b)
@@ -101,7 +101,7 @@ func (self *Runner) Execute(step *app.Step) error {
 	method := strings.ToUpper(step.Request.Method)
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return oops.Err(oops.Internal, "failed to initialize the request for the step", err)
+		return []byte{}, oops.Err(oops.Internal, "failed to initialize the request for the step", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -117,31 +117,31 @@ func (self *Runner) Execute(step *app.Step) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return &AssertionFailure{
+			return []byte{}, &AssertionFailure{
 				Err:      oops.Err(oops.StepRequestDeadlineExceeded, "request was cancelled by context deadline", err),
 				Response: nil,
 				Step:     step,
 			}
 		} else {
-			return oops.Err(oops.StepRequestFailed, "failed to execute the request for the step", err)
+			return []byte{}, oops.Err(oops.StepRequestFailed, "failed to execute the request for the step", err)
 		}
 	}
 	defer resp.Body.Close()
 
 	self.stepsRan += 1
 
-	responseBodyBytes, err := io.ReadAll(resp.Body)
+	responseBodyInBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return oops.Err(oops.StepResponseReadFailed, "failed to read response body", err)
+		return []byte{}, oops.Err(oops.StepResponseReadFailed, "failed to read response body", err)
 	}
 
 	// Validate assertion
 
-	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyBytes)
+	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyInBytes)
 	if err != nil {
-		return &AssertionFailure{
+		return []byte{}, &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
-			Response: responseBodyBytes,
+			Response: responseBodyInBytes,
 			Step:     step,
 		}
 	}
@@ -151,21 +151,21 @@ func (self *Runner) Execute(step *app.Step) error {
 	if len(step.Exports) != 0 {
 		for ident, jspath := range step.Exports {
 			var body map[string]any
-			err := json.Unmarshal(responseBodyBytes, &body)
+			err := json.Unmarshal(responseBodyInBytes, &body)
 			if err != nil {
-				return oops.Err(oops.StepResponseReadFailed, "failed to unmarshal response body for exports", err)
+				return []byte{}, oops.Err(oops.StepResponseReadFailed, "failed to unmarshal response body for exports", err)
 			}
 
 			value, err := jsonpath.JsonPathLookup(body, jspath)
 			if err != nil {
-				return oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup jsonpath %s for export %s", jspath, ident), err)
+				return []byte{}, oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup jsonpath %s for export %s", jspath, ident), err)
 			}
 
 			self.symtable[ident] = value
 		}
 	}
 
-	return nil
+	return responseBodyInBytes, nil
 }
 
 func (self *Runner) StepsRan() int {
