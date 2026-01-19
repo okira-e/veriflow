@@ -213,7 +213,75 @@ func TestStepAddCmd(t *testing.T) {
 		}
 	})
 
-	// Test case 4: Add step with exports
+	// Test case 4: Add step with isNot assertion
+	t.Run("add step with isNot assertion", func(t *testing.T) {
+		flags := addCmdFlags{
+			Flow:   "test-flow",
+			Method: "GET",
+			Path:   "/users/123",
+			Status: 200,
+			AssertExpressions: []string{
+				"isNot $.status deleted",
+				"isNot $.role admin",
+			},
+		}
+
+		cmd := &cobra.Command{Use: "add"}
+
+		err := runAddCmd(cmd, []string{"check-user-status"}, flags)
+		if err != nil {
+			t.Fatalf("failed to add step: %v", err)
+		}
+
+		// Verify the step was added with isNot assertions
+		loadedCfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		flow, ok := loadedCfg.GetFlow("test-flow")
+		if !ok {
+			t.Fatal("flow not found")
+		}
+
+		step, ok := flow.GetStep("check-user-status")
+		if !ok {
+			t.Fatal("step not found")
+		}
+
+		if !step.Assert.All.IsSome() {
+			t.Fatal("expected assertions to be set")
+		}
+
+		assertions := step.Assert.All.Unwrap()
+		if len(assertions) != 2 {
+			t.Fatalf("expected 2 assertions, got %d", len(assertions))
+		}
+
+		// Check first isNot assertion
+		if assertions[0].JsonPath != "$.status" {
+			t.Errorf("expected jsonpath $.status, got %s", assertions[0].JsonPath)
+		}
+		if !assertions[0].IsNot.IsSome() {
+			t.Error("expected isNot to be set")
+		}
+		if assertions[0].IsNot.Unwrap() != "deleted" {
+			t.Errorf("expected isNot value deleted, got %s", assertions[0].IsNot.Unwrap())
+		}
+
+		// Check second isNot assertion
+		if assertions[1].JsonPath != "$.role" {
+			t.Errorf("expected jsonpath $.role, got %s", assertions[1].JsonPath)
+		}
+		if !assertions[1].IsNot.IsSome() {
+			t.Error("expected isNot to be set")
+		}
+		if assertions[1].IsNot.Unwrap() != "admin" {
+			t.Errorf("expected isNot value admin, got %s", assertions[1].IsNot.Unwrap())
+		}
+	})
+
+	// Test case 5: Add step with exports
 	t.Run("add step with exports", func(t *testing.T) {
 		flags := addCmdFlags{
 			Flow:   "test-flow",

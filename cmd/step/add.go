@@ -48,6 +48,9 @@ Assertions syntax:
   contains <jsonpath> <value>
     Example: --assert "contains $.roles admin"
 
+  isNot <jsonpath> <value>
+  	Example: --assert "isNot $.status PENDING"
+
 Exports syntax:
   <varname> <jsonpath>
     Example: --export "user_id $.data.user_id"
@@ -233,8 +236,8 @@ func promptForAssertions(flags *addCmdFlags) error {
 
 	for {
 		// Prompt for assertion type
-		assertionTypeOptions := huh.NewOptions("exists", "equals", "contains")
-		assertionType, err := cli.PromptForOption("Assertion type (exists/equals/contains)", assertionTypeOptions, true)
+		assertionTypeOptions := huh.NewOptions("exists", "equals", "contains", "isNot")
+		assertionType, err := cli.PromptForOption("Assertion type (exists/equals/contains/isNot)", assertionTypeOptions, true)
 		if err != nil {
 			return err
 		}
@@ -273,6 +276,12 @@ func promptForAssertions(flags *addCmdFlags) error {
 				return err
 			}
 			assertionExpr = fmt.Sprintf("contains %s %s", jsonPath, value)
+		case "isNot":
+			value, err := cli.PromptForString(fmt.Sprintf("Substring to check for in %s", jsonPath), "", true)
+			if err != nil {
+				return err
+			}
+			assertionExpr = fmt.Sprintf("isNot %s %s", jsonPath, value)
 		default:
 			return oops.Err(oops.ErrInvalidInput, fmt.Sprintf("unknown assertion type: %s", assertionType), nil)
 		}
@@ -357,7 +366,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 
 	var assert app.Assert
 	if len(flags.AssertExpressions) != 0 {
-		// Build the assertions like: equals, contain, etc from the CLI expression.
+		// Build the assertions like: equals, contain, and isNot from the CLI expression.
 		all, err := BuildAssertObjectFromExpressions(flags.AssertExpressions)
 		if err != nil {
 			return nil, oops.Err(oops.AssertionExpressionParsingFailure, "failed to parse the assertion expression", err)
@@ -387,18 +396,19 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 //	exists   <jsonpath>
 //	equals   <jsonpath> <value>
 //	contains <jsonpath> <value>
+//	isNot    <jsonpath> <value>
 //
 // @AI
 func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
 	// Patterns (case-insensitive). Uses RE2 via Go's regexp package.
 	var (
 		reExists = regexp.MustCompile(`(?i)^\s*exists\s+(\$[^\s]+)\s*$`)
-		// equals/contains with value that can be:
+		// string with value that can be:
 		//  - "double quoted"
 		//  - 'single quoted'
 		//  - or unquoted (read until end, then trim whitespace)
 		reWithVal = regexp.MustCompile(
-			`(?i)^\s*(equals|contains)\s+(\$[^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
+			`(?i)^\s*(equals|contains|isNot)\s+(\$[^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
 		)
 	)
 
@@ -421,14 +431,15 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 				Exists:   Some(true),
 				Contains: None[string](),
 				Equals:   None[string](),
+				IsNot:    None[string](),
 			}
 			asserts = append(asserts, &assertion)
 			continue
 		}
 
-		// equals / contains
+		// equals / contains / isNot
 		if m := reWithVal.FindStringSubmatch(s); m != nil {
-			kind := strings.ToLower(m[1])
+			kind := m[1]
 			path := m[2]
 			val := firstNonEmpty(m[3], m[4], strings.TrimSpace(m[5]))
 
@@ -456,6 +467,15 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 					Equals:   None[string](),
 				}
 				asserts = append(asserts, &assertion)
+			case "isNot":
+				assertion := app.Assertion{
+					JsonPath: path,
+					Exists:   Some(true),
+					Contains: None[string](),
+					IsNot:    Some(val),
+					Equals:   None[string](),
+				}
+				asserts = append(asserts, &assertion)
 			default:
 				// Should never happen due to regex, but keep a guard.
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)
@@ -464,7 +484,7 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 		}
 
 		return nil, fmt.Errorf(
-			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <jsonpath>\n  - equals <jsonpath> <value>\n  - contains <jsonpath> <value>",
+			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <jsonpath>\n  - equals <jsonpath> <value>\n  - contains <jsonpath> <value> - isNot <jsonpath> <value>",
 			i+1, raw,
 		)
 	}

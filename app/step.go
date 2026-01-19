@@ -63,6 +63,7 @@ type Assertion struct {
 	Exists   Option[bool]   `json:"exists"`
 	Contains Option[string] `json:"contains"`
 	Equals   Option[string] `json:"equals"`
+	IsNot    Option[string] `json:"isNot"`
 }
 
 type Exports = map[string]string // var_name->jsonpath

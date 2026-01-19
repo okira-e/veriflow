@@ -32,7 +32,6 @@ func validateAssertClause(assert *app.Assert, statusCode int, body []byte) error
 	return nil
 }
 
-
 func validateAssertion(assertion *app.Assertion, body []byte) error {
 	if len(body) == 0 {
 		return oops.Err(oops.StepResponseEmpty, "step's response body is empty", nil)
@@ -56,6 +55,18 @@ func validateAssertion(assertion *app.Assertion, body []byte) error {
 			// It shouldn't exist, yet it does.
 			message := fmt.Sprintf("jsonpath '%s' found in response but it shouldn't exist", assertion.JsonPath)
 			return oops.Err(oops.StepRequestResponseKeyForbidden, message, nil)
+		}
+	}
+
+	if assertion.IsNot.IsSome() {
+		expectedNotToBe := assertion.IsNot.Unwrap()
+		actual := fmt.Sprintf("%v", value)
+		if actual == "<nil>" {
+			actual = "null"
+		}
+		if actual == expectedNotToBe {
+			message := fmt.Sprintf("jsonpath '%s' expected to never equal '%s'", assertion.JsonPath, expectedNotToBe)
+			return oops.Err(oops.StepRequestResponseValueMismatch, message, nil)
 		}
 	}
 

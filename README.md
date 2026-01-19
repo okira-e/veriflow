@@ -199,6 +199,7 @@ The configuration file (`veriflow.json`) has the following structure:
 | `jsonpath` | string  | Yes      | JSONPath expression to evaluate                        |
 | `exists`   | boolean | No       | Assert the path exists (true) or doesn't exist (false) |
 | `equals`   | string  | No       | Assert the value equals this string                    |
+| `isNot`    | string  | No       | Assert the value does NOT equal this string            |
 | `contains` | string  | No       | Assert the value contains this substring               |
 
 #### Exports Object
@@ -344,6 +345,7 @@ veriflow step add register \
   --status 201 \
   --assert "exists $.data.id" \
   --assert "equals $.data.email test@example.com" \
+  --assert "isNot $.data.stats PENDING" \
   --export "user_id $.data.id" \
   --non-interactive
 ```
@@ -364,6 +366,7 @@ Assertion syntax:
 ```
 exists <jsonpath>
 equals <jsonpath> <value>
+isNot  <jsonpath> <value>
 contains <jsonpath> <value>
 ```
 
