@@ -98,12 +98,19 @@ func rootCmd(rootFlags *runRootFlags, args []string) (bool, error) {
 			printer = logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 		}
 
-		printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
-		if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
-			return false, err
+		beforeRunHooksExist := len(cfg.BeforeRun) > 0
+		afterRunHooksExist := len(cfg.AfterRun) > 0
+
+		if beforeRunHooksExist {
+			printer.Styled(logging.Info, logging.Normal, "Running beforeRun hook commands", true)
+			if err := beforeRunCommands(cfg, rootFlags.ShowHooks); err != nil {
+				return false, err
+			}
 		}
-		defer afterRunCommands(cfg, rootFlags.ShowHooks)
-		defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
+		if afterRunHooksExist {
+			defer afterRunCommands(cfg, rootFlags.ShowHooks)
+			defer printer.Styled(logging.Info, logging.Normal, "Running afterRun hook commands", true)
+		}
 	}
 
 	targets := []Target{}

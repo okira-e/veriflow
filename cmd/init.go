@@ -68,7 +68,12 @@ func runInitCmd(flags *initCmdFlags) error {
 		return oops.Err(oops.ConfigMarshalError, "Failed to marshal config to JSON", jsonErr)
 	}
 
-	writeErr := os.WriteFile("veriflow.json", defaultConfigJson, 0644)
+	configFile := "veriflow.json"
+	if cliopts.ConfigFile != "" {
+		configFile = cliopts.ConfigFile
+	}
+
+	writeErr := os.WriteFile(configFile, defaultConfigJson, 0644)
 	if writeErr != nil {
 		return oops.Err(oops.FileWriteError, "Failed to write the default config to file", writeErr)
 	}

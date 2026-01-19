@@ -13,7 +13,11 @@ type AssertionFailure struct {
 }
 
 func (self *AssertionFailure) Error() string {
-	return self.Flow.Name + "/" + self.Step.Name + ": " + self.Err.Error()
+	flowName := "---"
+	if self.Flow != nil {
+		flowName = self.Flow.Name
+	}
+	return flowName + "/" + self.Step.Name + ": " + self.Err.Error()
 }
 
 func (self *AssertionFailure) Unwrap() error {

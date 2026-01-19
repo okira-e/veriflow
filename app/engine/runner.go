@@ -110,7 +110,7 @@ func (self *Runner) Execute(step *app.Step) error {
 	client := http.DefaultClient
 	if !step.Request.DisableHeaders {
 		client = &http.Client{
-			Jar: self.cookieJar, // stateful per-run cookie jar
+			Jar: self.cookieJar,
 		}
 	}
 
