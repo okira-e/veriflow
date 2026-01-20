@@ -29,6 +29,7 @@ type Request struct {
 	Method         string                 `json:"method"`
 	Path           string                 `json:"path"`
 	Json           Option[map[string]any] `json:"json"`
+	Xml            Option[string]         `json:"xml"`
 	DisableHeaders bool                   `json:"disableHeaders"`
 }
 
@@ -60,6 +61,7 @@ func NewAssert(status int, all Option[[]*Assertion]) Assert {
 
 type Assertion struct {
 	JsonPath string         `json:"jsonpath"`
+	XPath    string         `json:"xpath"`
 	Exists   Option[bool]   `json:"exists"`
 	Contains Option[string] `json:"contains"`
 	Equals   Option[string] `json:"equals"`

@@ -269,7 +269,7 @@ func flattenTargets(targets []Target, skips map[string]bool) []StepRun {
 	return runs
 }
 
-func stepKey(flowName, stepName string) string {
+func stepKey(flowName string, stepName string) string {
 	return flowName + "/" + stepName
 }
 
@@ -354,7 +354,7 @@ func makePrinter() logging.Printer {
 	return logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 }
 
-func report(success bool, elapsed time.Duration, stepsRan, totalSteps int) {
+func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
 	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
 
 	printer.Println(logging.Info, fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed)))
@@ -367,7 +367,7 @@ func report(success bool, elapsed time.Duration, stepsRan, totalSteps int) {
 	}
 }
 
-func reportJSON(success bool, elapsed time.Duration, stepsRan, totalSteps int, ranHooks bool) {
+func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int, ranHooks bool) {
 	printer := logging.NewJSONPrinter(cliopts.Silent)
 	printer.PrintStructured(map[string]any{
 		"took":     utils.FormatDuration(elapsed),

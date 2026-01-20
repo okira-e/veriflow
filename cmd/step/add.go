@@ -23,6 +23,7 @@ type addCmdFlags struct {
 	Method            string `validate:"required,oneof=GET POST PUT PATCH DELETE OPTIONS HEAD"`
 	Path              string `validate:"required,startswith=/"`
 	Json              string
+	Xml               string
 	Status            int `validate:"required,gt=99,lt=600"`
 	NoSave            bool
 	AssertExpressions []string
@@ -38,22 +39,27 @@ func newAddCmd() *cobra.Command {
 		Long: `
 Add a new test step to a flow.
 		
-Assertions syntax:
-  exists <jsonpath>
+Assertions syntax (JSON with JSONPath or XML with XPath):
+  exists <path>
     Example: --assert "exists $.data.token"
+    Example: --assert "exists /response/data/token"
 
-  equals <jsonpath> <value>
+  equals <path> <value>
     Example: --assert "equals $.user.id 42"
+    Example: --assert "equals /response/user/id 42"
 
-  contains <jsonpath> <value>
+  contains <path> <value>
     Example: --assert "contains $.roles admin"
+    Example: --assert "contains /response/roles admin"
 
-  isNot <jsonpath> <value>
+  isNot <path> <value>
   	Example: --assert "isNot $.status PENDING"
+  	Example: --assert "isNot /response/status PENDING"
 
-Exports syntax:
-  <varname> <jsonpath>
+Exports syntax (JSONPath for JSON, XPath for XML):
+  <varname> <path>
     Example: --export "user_id $.data.user_id"
+    Example: --export "user_id /response/data/user_id"
     Example: --export "token $.data.token"
 `,
 
@@ -67,9 +73,10 @@ Exports syntax:
 	cmd.Flags().StringVar(&flags.Method, "method", "", "HTTP method")
 	cmd.Flags().StringVar(&flags.Path, "path", "", "Request path")
 	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional)")
+	cmd.Flags().StringVar(&flags.Xml, "xml", "", "XML body (optional)")
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
 	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
-	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname jsonpath)")
+	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname path)")
 	cmd.Flags().BoolVar(&flags.NoSave, "no-save", false, "Modify the config but don't save on disk")
 
 	return cmd
@@ -198,12 +205,27 @@ func promptForRequiredFlags(flags *addCmdFlags) error {
 }
 
 func promptForOptionalFlags(flags *addCmdFlags) error {
-	var err error
-
-	if flags.Json == "" && flags.Method != "GET" {
-		flags.Json, err = cli.PromptForJson("JSON to send", "", false)
+	if flags.Json == "" && flags.Xml == "" && flags.Method != "GET" {
+		// Ask user if they want JSON or XML
+		bodyTypeOptions := huh.NewOptions("json", "xml", "none")
+		bodyType, err := cli.PromptForOption("Request body type (json/xml/none)", bodyTypeOptions, false)
 		if err != nil {
 			return err
+		}
+
+		switch bodyType {
+		case "json":
+			var err error
+			flags.Json, err = cli.PromptForJson("JSON to send", "", false)
+			if err != nil {
+				return err
+			}
+		case "xml":
+			var err error
+			flags.Xml, err = cli.PromptForString("XML to send", "", false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -379,6 +401,9 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	}
 
 	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
+	if flags.Xml != "" {
+		request.Xml = Some(flags.Xml)
+	}
 
 	exports, err := BuildExportsFromExpressions(flags.ExportExpressions)
 	if err != nil {
@@ -393,22 +418,25 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 // BuildAssertObjectFromExpressions converts CLI --assert expressions into []app.Assertion.
 // Valid forms:
 //
-//	exists   <jsonpath>
-//	equals   <jsonpath> <value>
-//	contains <jsonpath> <value>
-//	isNot    <jsonpath> <value>
+//	exists   <jsonpath|xpath>
+//	equals   <jsonpath|xpath> <value>
+//	contains <jsonpath|xpath> <value>
+//	isNot    <jsonpath|xpath> <value>
+//
+// Supports both JSONPath ($.path) and XPath (/path)
 //
 // @AI
 func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
 	// Patterns (case-insensitive). Uses RE2 via Go's regexp package.
 	var (
-		reExists = regexp.MustCompile(`(?i)^\s*exists\s+(\$[^\s]+)\s*$`)
+		// Match paths starting with $ (JSONPath) or / (XPath)
+		reExists = regexp.MustCompile(`(?i)^\s*exists\s+([\$/][^\s]+)\s*$`)
 		// string with value that can be:
 		//  - "double quoted"
 		//  - 'single quoted'
 		//  - or unquoted (read until end, then trim whitespace)
 		reWithVal = regexp.MustCompile(
-			`(?i)^\s*(equals|contains|isNot)\s+(\$[^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
+			`(?i)^\s*(equals|contains|isNot)\s+([\$/][^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
 		)
 	)
 
@@ -423,16 +451,19 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 		// exists
 		if m := reExists.FindStringSubmatch(s); m != nil {
 			path := m[1]
-			if err := validateJSONPath(path); err != nil {
+			if err := validatePath(path); err != nil {
 				return nil, fmt.Errorf("assertion #%d: %w", i+1, err)
 			}
-			assertion := app.Assertion{
-				JsonPath: path,
-				Exists:   Some(true),
-				Contains: None[string](),
-				Equals:   None[string](),
-				IsNot:    None[string](),
+			assertion := app.Assertion{}
+			if strings.HasPrefix(path, "$") {
+				assertion.JsonPath = path
+			} else if strings.HasPrefix(path, "/") {
+				assertion.XPath = path
 			}
+			assertion.Exists = Some(true)
+			assertion.Contains = None[string]()
+			assertion.Equals = None[string]()
+			assertion.IsNot = None[string]()
 			asserts = append(asserts, &assertion)
 			continue
 		}
@@ -443,48 +474,44 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			path := m[2]
 			val := firstNonEmpty(m[3], m[4], strings.TrimSpace(m[5]))
 
-			if err := validateJSONPath(path); err != nil {
+			if err := validatePath(path); err != nil {
 				return nil, fmt.Errorf("assertion #%d: %w", i+1, err)
 			}
 			if val == "" {
 				return nil, fmt.Errorf("assertion #%d: missing VALUE for %q", i+1, kind)
 			}
 
+			assertion := app.Assertion{Exists: Some(true)}
+			if strings.HasPrefix(path, "$") {
+				assertion.JsonPath = path
+			} else if strings.HasPrefix(path, "/") {
+				assertion.XPath = path
+			}
+
 			switch kind {
 			case "equals":
-				assertion := app.Assertion{
-					JsonPath: path,
-					Exists:   Some(true),
-					Contains: None[string](),
-					Equals:   Some(val),
-				}
-				asserts = append(asserts, &assertion)
+				assertion.Equals = Some(val)
+				assertion.Contains = None[string]()
+				assertion.IsNot = None[string]()
 			case "contains":
-				assertion := app.Assertion{
-					JsonPath: path,
-					Exists:   Some(true),
-					Contains: Some(val),
-					Equals:   None[string](),
-				}
-				asserts = append(asserts, &assertion)
+				assertion.Contains = Some(val)
+				assertion.Equals = None[string]()
+				assertion.IsNot = None[string]()
 			case "isNot":
-				assertion := app.Assertion{
-					JsonPath: path,
-					Exists:   Some(true),
-					Contains: None[string](),
-					IsNot:    Some(val),
-					Equals:   None[string](),
-				}
-				asserts = append(asserts, &assertion)
+				assertion.IsNot = Some(val)
+				assertion.Equals = None[string]()
+				assertion.Contains = None[string]()
 			default:
 				// Should never happen due to regex, but keep a guard.
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)
 			}
+
+			asserts = append(asserts, &assertion)
 			continue
 		}
 
 		return nil, fmt.Errorf(
-			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <jsonpath>\n  - equals <jsonpath> <value>\n  - contains <jsonpath> <value> - isNot <jsonpath> <value>",
+			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <path>\n  - equals <path> <value>\n  - contains <path> <value>\n  - isNot <path> <value>\nWhere <path> is JSONPath ($.path) or XPath (/path)",
 			i+1, raw,
 		)
 	}
@@ -557,6 +584,19 @@ func validateJSONPath(p string) error {
 	}
 	if strings.ContainsAny(p, " \t\r\n") {
 		return fmt.Errorf("JSONPath must not contain whitespace: %q", p)
+	}
+	return nil
+}
+
+func validatePath(p string) error {
+	if p == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+	if p[0] != '$' && p[0] != '/' {
+		return fmt.Errorf("path must start with '$' (JSONPath) or '/' (XPath): %q", p)
+	}
+	if strings.ContainsAny(p, " \t\r\n") {
+		return fmt.Errorf("path must not contain whitespace: %q", p)
 	}
 	return nil
 }

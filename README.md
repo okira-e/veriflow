@@ -80,17 +80,26 @@ Common use cases:
 - JWT tokens
 - User ID created in a test to be asserted in the following GET request
 
-Exports are resolved via JSONPath.
+Exports are resolved via JSONPath (for JSON responses) or XPath (for XML responses).
 
 #### Assertions
 
 Veriflow supports:
 
 - Status code checks
-- JSONPath existence
-- JSONPath equality / containment checks
+- JSONPath existence / equality / containment (for JSON responses)
+- XPath existence / equality / containment (for XML responses)
 
 Assertions are explicit. No magic.
+
+#### Content Type Support
+
+Veriflow automatically detects response content types and uses the appropriate parser:
+
+- **JSON**: Uses JSONPath for assertions and exports (e.g., `$.data.user.id`)
+- **XML**: Uses XPath for assertions and exports (e.g., `/response/data/user/id`)
+
+You can send either JSON or XML in your requests using the `json` or `xml` fields.
 
 ### Installation
 
@@ -183,6 +192,7 @@ The configuration file (`veriflow.json`) has the following structure:
 | `method`         | string  | Yes      | HTTP method (GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD) |
 | `path`           | string  | Yes      | Request path (appended to baseUrl)                         |
 | `json`           | object  | No       | JSON request body                                          |
+| `xml`            | string  | No       | XML request body (alternative to json)                     |
 | `disableHeaders` | boolean | No       | If true, disables automatic cookie handling                |
 
 #### Assert Object
@@ -196,20 +206,32 @@ The configuration file (`veriflow.json`) has the following structure:
 
 | Field      | Type    | Required | Description                                            |
 | ---------- | ------- | -------- | ------------------------------------------------------ |
-| `jsonpath` | string  | Yes      | JSONPath expression to evaluate                        |
+| `jsonpath` | string  | No\*     | JSONPath expression to evaluate (for JSON responses)   |
+| `xpath`    | string  | No\*     | XPath expression to evaluate (for XML responses)       |
 | `exists`   | boolean | No       | Assert the path exists (true) or doesn't exist (false) |
 | `equals`   | string  | No       | Assert the value equals this string                    |
 | `isNot`    | string  | No       | Assert the value does NOT equal this string            |
 | `contains` | string  | No       | Assert the value contains this substring               |
 
+\*Either `jsonpath` or `xpath` is required. The appropriate one is used based on the response Content-Type.
+
 #### Exports Object
 
-A map of variable names to JSONPath expressions:
+A map of variable names to JSONPath or XPath expressions:
 
 ```json
 {
     "user_id": "$.data.user.id",
     "token": "$.data.token"
+}
+```
+
+For XML responses, use XPath:
+
+```json
+{
+    "user_id": "/response/data/user/id",
+    "token": "/response/data/token"
 }
 ```
 
@@ -356,24 +378,62 @@ veriflow step add register \
 | `--method`  | HTTP method                       |
 | `--path`    | Request path                      |
 | `--json`    | JSON body                         |
+| `--xml`     | XML body                          |
 | `--status`  | Expected HTTP status code         |
 | `--assert`  | Assertion expression (repeatable) |
 | `--export`  | Export expression (repeatable)    |
 | `--no-save` | Modify config in memory only      |
 
-Assertion syntax:
+Assertion syntax (supports both JSONPath and XPath):
 
 ```
-exists <jsonpath>
-equals <jsonpath> <value>
-isNot  <jsonpath> <value>
-contains <jsonpath> <value>
+exists <path>
+equals <path> <value>
+isNot  <path> <value>
+contains <path> <value>
 ```
+
+Where `<path>` is either:
+
+- JSONPath: `$.data.user.id`
+- XPath: `/response/data/user/id`
 
 Export syntax:
 
 ```
-<varname> <jsonpath>
+<varname> <path>
+```
+
+Examples:
+
+```bash
+# JSON API
+veriflow step add get-user \
+  --flow users \
+  --method GET \
+  --path /api/users/1 \
+  --status 200 \
+  --assert "exists $.data.id" \
+  --assert "equals $.data.name John" \
+  --export "user_id $.data.id"
+
+# XML API
+veriflow step add get-user-xml \
+  --flow users \
+  --method GET \
+  --path /api/users/1 \
+  --status 200 \
+  --assert "exists /user/id" \
+  --assert "equals /user/name John" \
+  --export "user_id /user/id"
+
+# XML request
+veriflow step add create-user \
+  --flow users \
+  --method POST \
+  --path /api/users \
+  --xml '<user><name>John</name></user>' \
+  --status 201
 ```
 
 ### Bindings

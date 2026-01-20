@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antchfx/xmlquery"
 	"github.com/okira-e/veriflow/app"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
@@ -87,14 +88,20 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	self.processBindingsForStep(step)
 
 	var body io.Reader
+	var contentType string
+	
 	if step.Request.Json.IsSome() {
 		payload := step.Request.Json.Unwrap()
 		b, err := json.Marshal(payload)
 		if err != nil {
 			return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to marshal JSON body", err)
 		}
-
 		body = bytes.NewReader(b)
+		contentType = "application/json"
+	} else if step.Request.Xml.IsSome() {
+		xmlData := step.Request.Xml.Unwrap()
+		body = bytes.NewReader([]byte(xmlData))
+		contentType = "application/xml"
 	}
 
 	url := fmt.Sprintf("%s%s", self.settings.getBaseUrl(), step.Request.Path)
@@ -103,7 +110,9 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	if err != nil {
 		return []byte{}, oops.Err(oops.Internal, "failed to initialize the request for the step", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 
 	// Send the request
 
@@ -137,7 +146,8 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 
 	// Validate assertion
 
-	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyInBytes)
+	responseContentType := resp.Header.Get("Content-Type")
+	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyInBytes, responseContentType)
 	if err != nil {
 		return []byte{}, &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
@@ -149,19 +159,9 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	// Set exports if they exist
 
 	if len(step.Exports) != 0 {
-		for ident, jspath := range step.Exports {
-			var body map[string]any
-			err := json.Unmarshal(responseBodyInBytes, &body)
-			if err != nil {
-				return []byte{}, oops.Err(oops.StepResponseReadFailed, "failed to unmarshal response body for exports", err)
-			}
-
-			value, err := jsonpath.JsonPathLookup(body, jspath)
-			if err != nil {
-				return []byte{}, oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup jsonpath %s for export %s", jspath, ident), err)
-			}
-
-			self.symtable[ident] = value
+		err := self.processExports(step.Exports, responseBodyInBytes, responseContentType)
+		if err != nil {
+			return []byte{}, err
 		}
 	}
 
@@ -188,6 +188,9 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 			return oops.Err(oops.StepRequestProcessingFailed, "failed to process request body", err)
 		}
 		step.Request.Json = Some(processedRequestBody)
+	} else if step.Request.Xml.IsSome() {
+		xmlData := step.Request.Xml.Unwrap()
+		step.Request.Xml = Some(self.resolveBindingFromString(xmlData))
 	}
 
 	// Process assertions
@@ -263,6 +266,48 @@ func (self *Runner) resolveBindingFromString(s string) string {
 
 		return m
 	})
+}
+
+func (self *Runner) processExports(exports app.Exports, responseBody []byte, contentType string) error {
+	isXML := strings.Contains(strings.ToLower(contentType), "xml")
+	
+	if isXML {
+		return self.processXMLExports(exports, responseBody)
+	}
+	return self.processJSONExports(exports, responseBody)
+}
+
+func (self *Runner) processJSONExports(exports app.Exports, responseBody []byte) error {
+	var body map[string]any
+	err := json.Unmarshal(responseBody, &body)
+	if err != nil {
+		return oops.Err(oops.StepResponseReadFailed, "failed to unmarshal response body for exports", err)
+	}
+
+	for ident, jspath := range exports {
+		value, err := jsonpath.JsonPathLookup(body, jspath)
+		if err != nil {
+			return oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup jsonpath %s for export %s", jspath, ident), err)
+		}
+		self.symtable[ident] = value
+	}
+	return nil
+}
+
+func (self *Runner) processXMLExports(exports app.Exports, responseBody []byte) error {
+	doc, err := xmlquery.Parse(bytes.NewReader(responseBody))
+	if err != nil {
+		return oops.Err(oops.StepResponseReadFailed, "failed to parse XML response body for exports", err)
+	}
+
+	for ident, xpath := range exports {
+		node := xmlquery.FindOne(doc, xpath)
+		if node == nil {
+			return oops.Err(oops.StepExportFailed, fmt.Sprintf("failed to lookup xpath %s for export %s", xpath, ident), nil)
+		}
+		self.symtable[ident] = node.InnerText()
+	}
+	return nil
 }
 
 func (self *Runner) resolveBuiltinBinding(str string) (string, bool) {

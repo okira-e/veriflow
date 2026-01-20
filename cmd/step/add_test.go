@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/okira-e/veriflow/app"
@@ -281,7 +282,124 @@ func TestStepAddCmd(t *testing.T) {
 		}
 	})
 
-	// Test case 5: Add step with exports
+	// Test case 5: Add step with XML body
+	t.Run("add step with XML body", func(t *testing.T) {
+		flags := addCmdFlags{
+			Flow:   "test-flow",
+			Method: "POST",
+			Path:   "/api/users",
+			Xml:    `<user><name>John</name><email>john@example.com</email></user>`,
+			Status: 201,
+		}
+
+		cmd := &cobra.Command{Use: "add"}
+
+		err := runAddCmd(cmd, []string{"create-user-xml"}, flags)
+		if err != nil {
+			t.Fatalf("failed to add step: %v", err)
+		}
+
+		// Verify the step was added with XML
+		loadedCfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		flow, ok := loadedCfg.GetFlow("test-flow")
+		if !ok {
+			t.Fatal("flow not found")
+		}
+
+		step, ok := flow.GetStep("create-user-xml")
+		if !ok {
+			t.Fatal("step not found")
+		}
+
+		if !step.Request.Xml.IsSome() {
+			t.Error("expected XML to be set")
+		}
+
+		xmlData := step.Request.Xml.Unwrap()
+		if !strings.Contains(xmlData, "<user>") {
+			t.Errorf("expected XML data, got %s", xmlData)
+		}
+	})
+
+	// Test case 6: Add step with XPath assertions
+	t.Run("add step with XPath assertions", func(t *testing.T) {
+		flags := addCmdFlags{
+			Flow:   "test-flow",
+			Method: "GET",
+			Path:   "/api/users/123",
+			Status: 200,
+			AssertExpressions: []string{
+				"exists /user/id",
+				"equals /user/name John",
+				"contains /user/email @",
+			},
+		}
+
+		cmd := &cobra.Command{Use: "add"}
+
+		err := runAddCmd(cmd, []string{"get-user-xml"}, flags)
+		if err != nil {
+			t.Fatalf("failed to add step: %v", err)
+		}
+
+		// Verify the step was added with XPath assertions
+		loadedCfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		flow, ok := loadedCfg.GetFlow("test-flow")
+		if !ok {
+			t.Fatal("flow not found")
+		}
+
+		step, ok := flow.GetStep("get-user-xml")
+		if !ok {
+			t.Fatal("step not found")
+		}
+
+		if !step.Assert.All.IsSome() {
+			t.Fatal("expected assertions to be set")
+		}
+
+		assertions := step.Assert.All.Unwrap()
+		if len(assertions) != 3 {
+			t.Fatalf("expected 3 assertions, got %d", len(assertions))
+		}
+
+		// Check first assertion (exists)
+		if assertions[0].XPath != "/user/id" {
+			t.Errorf("expected xpath /user/id, got %s", assertions[0].XPath)
+		}
+		if !assertions[0].Exists.IsSome() {
+			t.Error("expected exists to be set")
+		}
+
+		// Check second assertion (equals)
+		if assertions[1].XPath != "/user/name" {
+			t.Errorf("expected xpath /user/name, got %s", assertions[1].XPath)
+		}
+		if !assertions[1].Equals.IsSome() {
+			t.Error("expected equals to be set")
+		}
+		if assertions[1].Equals.Unwrap() != "John" {
+			t.Errorf("expected equals value John, got %s", assertions[1].Equals.Unwrap())
+		}
+
+		// Check third assertion (contains)
+		if assertions[2].XPath != "/user/email" {
+			t.Errorf("expected xpath /user/email, got %s", assertions[2].XPath)
+		}
+		if !assertions[2].Contains.IsSome() {
+			t.Error("expected contains to be set")
+		}
+	})
+
+	// Test case 7: Add step with exports
 	t.Run("add step with exports", func(t *testing.T) {
 		flags := addCmdFlags{
 			Flow:   "test-flow",
@@ -327,6 +445,134 @@ func TestStepAddCmd(t *testing.T) {
 
 		if step.Exports["token"] != "$.data.token" {
 			t.Errorf("expected token export to be $.data.token, got %s", step.Exports["token"])
+		}
+	})
+}
+
+func TestBuildAssertObjectFromExpressions_XPath(t *testing.T) {
+	t.Run("XPath exists", func(t *testing.T) {
+		assertions, err := BuildAssertObjectFromExpressions([]string{
+			"exists /user/id",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(assertions) != 1 {
+			t.Fatalf("expected 1 assertion, got %d", len(assertions))
+		}
+
+		if assertions[0].XPath != "/user/id" {
+			t.Errorf("expected XPath /user/id, got %s", assertions[0].XPath)
+		}
+		if assertions[0].JsonPath != "" {
+			t.Errorf("expected empty JsonPath, got %s", assertions[0].JsonPath)
+		}
+		if !assertions[0].Exists.IsSome() || !assertions[0].Exists.Unwrap() {
+			t.Error("expected Exists to be true")
+		}
+	})
+
+	t.Run("XPath equals", func(t *testing.T) {
+		assertions, err := BuildAssertObjectFromExpressions([]string{
+			"equals /response/status success",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(assertions) != 1 {
+			t.Fatalf("expected 1 assertion, got %d", len(assertions))
+		}
+
+		if assertions[0].XPath != "/response/status" {
+			t.Errorf("expected XPath /response/status, got %s", assertions[0].XPath)
+		}
+		if !assertions[0].Equals.IsSome() || assertions[0].Equals.Unwrap() != "success" {
+			t.Errorf("expected Equals to be 'success', got %v", assertions[0].Equals)
+		}
+	})
+
+	t.Run("XPath contains", func(t *testing.T) {
+		assertions, err := BuildAssertObjectFromExpressions([]string{
+			"contains /user/email @example.com",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if assertions[0].XPath != "/user/email" {
+			t.Errorf("expected XPath /user/email, got %s", assertions[0].XPath)
+		}
+		if !assertions[0].Contains.IsSome() || assertions[0].Contains.Unwrap() != "@example.com" {
+			t.Errorf("expected Contains to be '@example.com', got %v", assertions[0].Contains)
+		}
+	})
+
+	t.Run("XPath isNot", func(t *testing.T) {
+		assertions, err := BuildAssertObjectFromExpressions([]string{
+			"isNot /user/role guest",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if assertions[0].XPath != "/user/role" {
+			t.Errorf("expected XPath /user/role, got %s", assertions[0].XPath)
+		}
+		if !assertions[0].IsNot.IsSome() || assertions[0].IsNot.Unwrap() != "guest" {
+			t.Errorf("expected IsNot to be 'guest', got %v", assertions[0].IsNot)
+		}
+	})
+
+	t.Run("Mixed JSONPath and XPath", func(t *testing.T) {
+		assertions, err := BuildAssertObjectFromExpressions([]string{
+			"exists $.data.token",
+			"equals /response/status ok",
+			"contains $.user.name John",
+			"isNot /error/code 500",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(assertions) != 4 {
+			t.Fatalf("expected 4 assertions, got %d", len(assertions))
+		}
+
+		// First is JSONPath
+		if assertions[0].JsonPath != "$.data.token" {
+			t.Errorf("expected JSONPath $.data.token, got %s", assertions[0].JsonPath)
+		}
+		if assertions[0].XPath != "" {
+			t.Errorf("expected empty XPath for JSONPath assertion")
+		}
+
+		// Second is XPath
+		if assertions[1].XPath != "/response/status" {
+			t.Errorf("expected XPath /response/status, got %s", assertions[1].XPath)
+		}
+		if assertions[1].JsonPath != "" {
+			t.Errorf("expected empty JSONPath for XPath assertion")
+		}
+
+		// Third is JSONPath
+		if assertions[2].JsonPath != "$.user.name" {
+			t.Errorf("expected JSONPath $.user.name, got %s", assertions[2].JsonPath)
+		}
+
+		// Fourth is XPath
+		if assertions[3].XPath != "/error/code" {
+			t.Errorf("expected XPath /error/code, got %s", assertions[3].XPath)
+		}
+	})
+
+	t.Run("Invalid path format", func(t *testing.T) {
+		_, err := BuildAssertObjectFromExpressions([]string{
+			"exists invalid.path",
+		})
+		if err == nil {
+			t.Error("expected error for invalid path format")
 		}
 	})
 }

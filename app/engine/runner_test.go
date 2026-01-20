@@ -717,3 +717,229 @@ func TestRunner_RunIdConsistency(t *testing.T) {
 		}
 	}
 }
+
+func TestRunner_XMLRequest(t *testing.T) {
+	var receivedBody string
+	var receivedContentType string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentType = r.Header.Get("Content-Type")
+		body, _ := io.ReadAll(r.Body)
+		receivedBody = string(body)
+
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<response><status>success</status></response>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	req := app.Request{
+		Method: "POST",
+		Path:   "/test",
+		Xml:    Some("<user><name>John</name></user>"),
+	}
+
+	step := app.NewStep("xml-request",
+		req,
+		app.NewAssert(200, None[[]*app.Assertion]()),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if receivedContentType != "application/xml" {
+		t.Errorf("expected Content-Type application/xml, got %s", receivedContentType)
+	}
+
+	if receivedBody != "<user><name>John</name></user>" {
+		t.Errorf("expected XML body, got %s", receivedBody)
+	}
+}
+
+func TestRunner_XMLResponseWithXPathAssertion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<user><id>123</id><name>John Doe</name><role>admin</role></user>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("xml-assertion",
+		app.NewRequest("GET", "/user", nil),
+		app.NewAssert(200, Some([]*app.Assertion{
+			{XPath: "/user/id", Equals: Some("123")},
+			{XPath: "/user/name", Contains: Some("John")},
+			{XPath: "/user/role", IsNot: Some("guest")},
+		})),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunner_XMLResponseExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<response><data><token>abc123</token></data></response>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("xml-exists",
+		app.NewRequest("GET", "/test", nil),
+		app.NewAssert(200, Some([]*app.Assertion{
+			{XPath: "/response/data/token", Exists: Some(true)},
+			{XPath: "/response/missing", Exists: Some(false)},
+		})),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunner_XMLExports(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<user><id>456</id><token>xyz789</token></user>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("xml-export",
+		app.NewRequest("GET", "/user", nil),
+		app.NewAssert(200, None[[]*app.Assertion]()),
+		app.Exports{
+			"user_id": "/user/id",
+			"token":   "/user/token",
+		})
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	symtable := runner.symtable
+	if symtable["user_id"] != "456" {
+		t.Errorf("expected user_id=456, got %v", symtable["user_id"])
+	}
+	if symtable["token"] != "xyz789" {
+		t.Errorf("expected token=xyz789, got %v", symtable["token"])
+	}
+}
+
+func TestRunner_XMLRequestWithBinding(t *testing.T) {
+	var receivedBody string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		receivedBody = string(body)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<response>ok</response>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	// Manually set an export for testing
+	runner.symtable["user_name"] = "Alice"
+
+	// Second step uses binding in XML
+	req := app.Request{
+		Method: "POST",
+		Path:   "/update",
+		Xml:    Some("<user><name>{{bind:user_name}}</name><id>{{RUN_ID}}</id></user>"),
+	}
+
+	step2 := app.NewStep("step2", req,
+		app.NewAssert(200, None[[]*app.Assertion]()),
+		app.Exports{})
+
+	_, err := runner.Execute(step2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(receivedBody, "<name>Alice</name>") {
+		t.Errorf("expected XML with resolved binding, got %s", receivedBody)
+	}
+	if !strings.Contains(receivedBody, "<id>"+runner.RunId+"</id>") {
+		t.Errorf("expected XML with RUN_ID, got %s", receivedBody)
+	}
+}
+
+func TestRunner_MixedJSONRequestXMLResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Server accepts JSON, returns XML
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<response><converted>true</converted></response>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("mixed",
+		app.NewRequest("POST", "/convert", map[string]any{"input": "data"}),
+		app.NewAssert(200, Some([]*app.Assertion{
+			{XPath: "/response/converted", Equals: Some("true")},
+		})),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunner_XMLAssertionFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<response><status>error</status></response>`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{BaseUrl: server.URL}
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("xml-fail",
+		app.NewRequest("GET", "/test", nil),
+		app.NewAssert(200, Some([]*app.Assertion{
+			{XPath: "/response/status", Equals: Some("success")}, // Will fail
+		})),
+		app.Exports{})
+
+	_, err := runner.Execute(step)
+	if err == nil {
+		t.Fatal("expected assertion failure")
+	}
+
+	var af *AssertionFailure
+	if !errors.As(err, &af) {
+		t.Error("expected AssertionFailure")
+	}
+}
