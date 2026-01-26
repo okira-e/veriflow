@@ -6,6 +6,7 @@ import (
 
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/cmd/export"
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
@@ -52,6 +53,8 @@ func Execute() {
 	step.SetupStepCommands(rootCmd)
 
 	run.SetupRunCommands(rootCmd)
+
+	export.SetupExportCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		if errors.Is(err, &run.RunAssertionError{}) { // An assertion failure happened from the server not a veriflow error.

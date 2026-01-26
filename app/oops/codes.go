@@ -68,6 +68,8 @@ const (
 	AuthenticationError
 	// JSONPath validation errors
 	JSONPathValidationError
+	// Exporting errors
+	InvalidExportFormat
 )
 
 func (code Code) String() string {
@@ -178,6 +180,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("AuthenticationError")
 	case JSONPathValidationError:
 		return PascalToScreamingSnake("JSONPathValidationError")
+	case InvalidExportFormat:
+		return PascalToScreamingSnake("InvalidExportFormat")
 	default:
 		return "UNKNOWN"
 	}
@@ -186,7 +190,7 @@ func (code Code) String() string {
 func (code Code) IsUserError() bool {
 	switch code {
 	case FlowNotFound, StepNotFound, EmptyFlows, StepAlreadyExists, UserAborted, ErrInvalidInput,
-		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigFileExistsError, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, BeforeRunFailed, AfterRunFailed, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError:
+		ValidationError, FlowAlreadyExists, ConfigFileNotFound, ConfigFileExistsError, ConfigMarshalError, ConfigUnmarshalError, JSONParseError, FileNotFound, FlowRemovalError, StepRequestFailed, StepRequestBuildFailed, StepRequestProcessingFailed, StepUnmarshalError, StepMarshalError, StepResponseReadFailed, StepResponseEmpty, BeforeRunFailed, AfterRunFailed, MissingRequiredFlag, InvalidTarget, AssertionExpressionParsingFailure, JSONPathValidationError, InvalidExportFormat:
 		return true
 	}
 

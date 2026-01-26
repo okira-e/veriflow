@@ -14,7 +14,6 @@ import (
 	"github.com/okira-e/veriflow/app/logging"
 	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
-	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -150,7 +149,7 @@ func runAddCmd(cmd *cobra.Command, args []string, flags addCmdFlags) error {
 		}
 	}
 
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	printer := logging.NewPrinter()
 	msg := fmt.Sprintf("Step \"%s\" has been added to the \"%s\" flow", stepName, flow.Name)
 	printer.Println(logging.Success, msg)
 

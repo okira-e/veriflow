@@ -9,7 +9,6 @@ import (
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/logging"
 	"github.com/okira-e/veriflow/app/oops"
-	"github.com/okira-e/veriflow/app/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +77,7 @@ func runInitCmd(flags *initCmdFlags) error {
 		return oops.Err(oops.FileWriteError, "Failed to write the default config to file", writeErr)
 	}
 
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	printer := logging.NewPrinter()
 	printer.Println(logging.Success, "Default config file created successfully at veriflow.json")
 
 	return nil

@@ -34,7 +34,7 @@ type Request struct {
 }
 
 func NewRequest(method string, path string, json map[string]any) Request {
-	var optionalJson = None[map[string]any]()
+	optionalJson := None[map[string]any]()
 	if json != nil {
 		optionalJson = Some(json)
 	}
@@ -43,7 +43,7 @@ func NewRequest(method string, path string, json map[string]any) Request {
 		Method:         method,
 		Path:           path,
 		Json:           optionalJson,
-		DisableHeaders: false, // By default we implictly set and include headers
+		DisableHeaders: false, // By default we implicitly set and include headers
 	}
 }
 

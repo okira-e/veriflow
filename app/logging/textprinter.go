@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/app/utils"
 )
 
 type Style uint8
@@ -33,12 +36,14 @@ type TextPrinter struct {
 	Color  bool
 }
 
-func NewPrinter(silent bool, color bool) *TextPrinter {
+func NewPrinter() *TextPrinter {
+	silent := cliopts.Silent
+	isColorEnabled := utils.IsColorEnabled()
 	return &TextPrinter{
 		Out:    os.Stdout,
 		Err:    os.Stderr,
 		Silent: silent,
-		Color:  color,
+		Color:  isColorEnabled,
 	}
 }
 

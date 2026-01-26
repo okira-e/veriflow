@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/engine"
@@ -61,7 +62,7 @@ func TestShowServerResponses(t *testing.T) {
 		Printer:             logging.NullPrinter{},
 	}
 
-	failures, err := executeSteps(runner, []StepRun{{Flow: flow, Step: step}}, opts)
+	failures, err := executeSteps(runner, []cli.Target{{Flow: flow, Step: step}}, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestShowServerResponses(t *testing.T) {
 	runner2 := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 	opts.ShowServerResponses = false
 
-	failures2, err2 := executeSteps(runner2, []StepRun{{Flow: flow, Step: step}}, opts)
+	failures2, err2 := executeSteps(runner2, []cli.Target{{Flow: flow, Step: step}}, opts)
 	if err2 != nil {
 		t.Fatalf("unexpected error: %v", err2)
 	}
@@ -103,8 +104,8 @@ func TestSkipFlag_SingleStep(t *testing.T) {
 
 	// Skip step2
 	skips := map[string]bool{"test-flow/step2": true}
-	targets := []Target{{Flow: flow, Step: nil}}
-	stepsToRun := flattenTargets(targets, skips)
+	targets := []cli.Target{{Flow: flow, Step: nil}}
+	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
 	opts := RunOptions{Printer: logging.NullPrinter{}}
@@ -146,8 +147,8 @@ func TestSkipFlag_EntireFlow(t *testing.T) {
 
 	// Skip flow2
 	skips := map[string]bool{"flow2/step1": true}
-	targets := []Target{{Flow: flow1, Step: nil}, {Flow: flow2, Step: nil}}
-	stepsToRun := flattenTargets(targets, skips)
+	targets := []cli.Target{{Flow: flow1, Step: nil}, {Flow: flow2, Step: nil}}
+	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
 	opts := RunOptions{Printer: logging.NullPrinter{}}
@@ -199,8 +200,8 @@ func TestKeepGoingFlag_StopsOnFirstFailure(t *testing.T) {
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{flow}}
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
-	targets := []Target{{Flow: flow, Step: nil}}
-	stepsToRun := flattenTargets(targets, nil)
+	targets := []cli.Target{{Flow: flow, Step: nil}}
+	stepsToRun := cli.FlattenTargets(targets, nil)
 
 	cliopts.Silent = true
 	opts := RunOptions{
@@ -244,8 +245,8 @@ func TestKeepGoingFlag_ContinuesOnFailure(t *testing.T) {
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{flow}}
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
-	targets := []Target{{Flow: flow, Step: nil}}
-	stepsToRun := flattenTargets(targets, nil)
+	targets := []cli.Target{{Flow: flow, Step: nil}}
+	stepsToRun := cli.FlattenTargets(targets, nil)
 
 	cliopts.Silent = true
 	opts := RunOptions{
@@ -297,8 +298,8 @@ func TestSkipFlag_MultipleSkips(t *testing.T) {
 		"test-flow/step2": true,
 		"test-flow/step4": true,
 	}
-	targets := []Target{{Flow: flow, Step: nil}}
-	stepsToRun := flattenTargets(targets, skips)
+	targets := []cli.Target{{Flow: flow, Step: nil}}
+	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
 	opts := RunOptions{Printer: logging.NullPrinter{}}
@@ -331,7 +332,7 @@ func TestParseTarget(t *testing.T) {
 	cfg.AddFlow(flow)
 
 	// Test whole flow
-	target, err := parseTarget(cfg, "my-flow")
+	target, err := cli.ParseTarget(cfg, "my-flow")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -343,7 +344,7 @@ func TestParseTarget(t *testing.T) {
 	}
 
 	// Test specific step
-	target2, err := parseTarget(cfg, "my-flow/my-step")
+	target2, err := cli.ParseTarget(cfg, "my-flow/my-step")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -352,13 +353,13 @@ func TestParseTarget(t *testing.T) {
 	}
 
 	// Test invalid
-	_, err = parseTarget(cfg, "/invalid")
+	_, err = cli.ParseTarget(cfg, "/invalid")
 	if err == nil {
 		t.Error("expected error for invalid target")
 	}
 
 	// Test non-existent flow
-	_, err = parseTarget(cfg, "no-such-flow")
+	_, err = cli.ParseTarget(cfg, "no-such-flow")
 	if err == nil {
 		t.Error("expected error for non-existent flow")
 	}

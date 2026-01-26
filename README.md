@@ -314,6 +314,44 @@ veriflow run --keep-going
 veriflow run --json-output --no-color --non-interactive
 ```
 
+#### veriflow export
+
+Export flows or steps to external request formats (e.g., curl commands) for inspection or manual execution.
+
+| Flag         | Description                                        |
+| ------------ | -------------------------------------------------- |
+| `--to`       | Export format (currently only "curl" supported)    |
+| `--out`      | Write output to file instead of stdout             |
+| `--base-url` | Override the baseUrl from config                   |
+
+**Output format:**
+- Single target: outputs raw curl command
+- Multiple targets: outputs JSON array with `stepName` and `curl` fields
+
+**Note:** Bindings like `{{RUN_ID}}`, `{{bind:var}}`, etc. are **NOT** resolved and will appear as-is in the exported output. Exports capture the request structure but not runtime state (cookies, auth tokens, etc.).
+
+Examples:
+
+```bash
+# Export entire flow as curl commands
+veriflow export user-onboarding
+
+# Export specific step
+veriflow export user-onboarding/register
+
+# Export multiple targets (outputs JSON array)
+veriflow export user-onboarding checkout/payment
+
+# Export to file
+veriflow export user-onboarding --out requests.json
+
+# Override base URL
+veriflow export user-onboarding --base-url http://staging.example.com
+
+# Explicit format (curl is default)
+veriflow export --to curl user-onboarding
+```
+
 #### veriflow flow add
 
 Add a new flow to the configuration.

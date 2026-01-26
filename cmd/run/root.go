@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/okira-e/veriflow/app"
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
@@ -21,15 +20,6 @@ import (
 )
 
 const maxResponseLines = 15
-
-// Target represents a user-specified target: either a whole flow or a specific step.
-type Target struct {
-	Flow *app.Flow
-	Step *app.Step // nil means "run entire flow"
-}
-
-// StepRun is a flattened, executable unit: one step with its flow context.
-type StepRun Target
 
 // RunOptions holds all runtime configuration for executing targets.
 type RunOptions struct {
@@ -104,7 +94,7 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 		return false, err
 	}
 
-	targets, err := parseTargets(cfg, args)
+	targets, err := cli.ParseTargets(cfg, args)
 	if err != nil {
 		return false, err
 	}
@@ -114,7 +104,7 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 		return false, err
 	}
 
-	stepsToRun := flattenTargets(targets, skips)
+	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	// Run hooks
 	if !flags.SkipHooks {
@@ -141,6 +131,8 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 		Printer:             makePrinter(),
 	}
 
+	opts.Printer.Println(logging.Info, fmt.Sprintf("Run ID: %s", runner.RunId))
+
 	start := time.Now()
 	failures, err := executeSteps(runner, stepsToRun, opts)
 	elapsed := time.Since(start)
@@ -159,71 +151,12 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 	return failures > 0, nil
 }
 
-// parseTargets converts CLI args into Target structs.
-// Empty args means "run all flows".
-func parseTargets(cfg *config.Cfg, args []string) ([]Target, error) {
-	if len(args) == 0 {
-		targets := make([]Target, len(cfg.Flows))
-		for i, flow := range cfg.Flows {
-			targets[i] = Target{Flow: flow, Step: nil}
-		}
-		return targets, nil
-	}
-
-	targets := make([]Target, 0, len(args))
-	for _, arg := range args {
-		target, err := parseTarget(cfg, arg)
-		if err != nil {
-			return nil, err
-		}
-		targets = append(targets, target)
-	}
-	return targets, nil
-}
-
-// parseTarget parses a single target string like "flow" or "flow/step".
-func parseTarget(cfg *config.Cfg, arg string) (Target, error) {
-	if len(arg) == 0 {
-		return Target{}, oops.Err(oops.InvalidTarget, "empty target", nil)
-	}
-	if arg[0] == '/' {
-		return Target{}, oops.Err(oops.InvalidTarget, fmt.Sprintf("invalid target %q", arg), nil)
-	}
-
-	arg = strings.TrimSuffix(arg, "/")
-
-	if !strings.Contains(arg, "/") {
-		// Whole flow
-		flow, ok := cfg.GetFlow(arg)
-		if !ok {
-			return Target{}, oops.Err(oops.FlowNotFound, fmt.Sprintf("flow %q doesn't exist", arg), nil)
-		}
-		return Target{Flow: flow, Step: nil}, nil
-	}
-
-	// Specific step
-	parts := strings.SplitN(arg, "/", 2)
-	flowName, stepName := parts[0], parts[1]
-
-	flow, ok := cfg.GetFlow(flowName)
-	if !ok {
-		return Target{}, oops.Err(oops.FlowNotFound, fmt.Sprintf("flow %q doesn't exist", flowName), nil)
-	}
-
-	step, ok := flow.GetStep(stepName)
-	if !ok {
-		return Target{}, oops.Err(oops.StepNotFound, fmt.Sprintf("step %q doesn't exist on flow %q", stepName, flowName), nil)
-	}
-
-	return Target{Flow: flow, Step: step}, nil
-}
-
-// parseSkips converts skip args into a set of StepRun for fast lookup.
+// parseSkips converts skip args into a set of cli.Target for fast lookup.
 func parseSkips(cfg *config.Cfg, skipArgs []string) (map[string]bool, error) {
 	skips := make(map[string]bool)
 
 	for _, skip := range skipArgs {
-		target, err := parseTarget(cfg, skip)
+		target, err := cli.ParseTarget(cfg, skip)
 		if err != nil {
 			// Adjust error message for skips
 			if strings.Contains(err.Error(), "doesn't exist") {
@@ -246,35 +179,12 @@ func parseSkips(cfg *config.Cfg, skipArgs []string) (map[string]bool, error) {
 	return skips, nil
 }
 
-// flattenTargets expands targets into individual StepRuns, excluding skipped ones.
-func flattenTargets(targets []Target, skips map[string]bool) []StepRun {
-	var runs []StepRun
-
-	for _, t := range targets {
-		if t.Step != nil {
-			// Single step target
-			if !skips[stepKey(t.Flow.Name, t.Step.Name)] {
-				runs = append(runs, StepRun{Flow: t.Flow, Step: t.Step})
-			}
-		} else {
-			// Entire flow
-			for _, step := range t.Flow.Steps {
-				if !skips[stepKey(t.Flow.Name, step.Name)] {
-					runs = append(runs, StepRun{Flow: t.Flow, Step: step})
-				}
-			}
-		}
-	}
-
-	return runs
-}
-
 func stepKey(flowName string, stepName string) string {
 	return flowName + "/" + stepName
 }
 
 // executeSteps runs all steps, knows to print them, and returns the failure count.
-func executeSteps(runner *engine.Runner, steps []StepRun, opts RunOptions) (int, error) {
+func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunOptions) (int, error) {
 	failures := 0
 
 	for _, sr := range steps {
@@ -351,11 +261,11 @@ func makePrinter() logging.Printer {
 	if cliopts.JSONOutput {
 		return logging.NullPrinter{}
 	}
-	return logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	return logging.NewPrinter()
 }
 
 func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	printer := logging.NewPrinter()
 
 	printer.Println(logging.Info, fmt.Sprintf("\nTook: %s", utils.FormatDuration(elapsed)))
 	printer.Println(logging.Info, fmt.Sprintf("Ran %d/%d tests.", stepsRan, totalSteps))
@@ -383,7 +293,7 @@ func reportAssertionFailure(af *engine.AssertionFailure, trimResponse bool) {
 		return
 	}
 
-	printer := logging.NewPrinter(cliopts.Silent, utils.IsColorEnabled())
+	printer := logging.NewPrinter()
 
 	flowName := "---"
 	if af.Flow != nil {
