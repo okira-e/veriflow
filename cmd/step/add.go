@@ -23,7 +23,8 @@ type addCmdFlags struct {
 	Path              string `validate:"required,startswith=/"`
 	Json              string
 	Xml               string
-	Status            int `validate:"required,gt=99,lt=600"`
+	Files             []string // format: "fieldName:path/to/file.pdf"
+	Status            int      `validate:"required,gt=99,lt=600"`
 	NoSave            bool
 	AssertExpressions []string
 	ExportExpressions []string
@@ -37,7 +38,17 @@ func newAddCmd() *cobra.Command {
 		Short: "Add a new test step",
 		Long: `
 Add a new test step to a flow.
-		
+
+File uploads (mutually exclusive with --json and --xml):
+  --file <fieldName>:<path>
+    Example: --file "avatar:test-files/avatar.jpg"
+    Example: --file "doc:docs/resume.pdf" --file "image:images/photo.png"
+
+  Notes:
+  - Paths are relative to veriflow.json location
+  - Files must be under 100MB
+  - MIME types auto-detected from file extension
+
 Assertions syntax (JSON with JSONPath or XML with XPath):
   exists <path>
     Example: --assert "exists $.data.token"
@@ -71,8 +82,9 @@ Exports syntax (JSONPath for JSON, XPath for XML):
 	cmd.Flags().StringVar(&flags.Flow, "flow", "", "Flow this step belongs to")
 	cmd.Flags().StringVar(&flags.Method, "method", "", "HTTP method")
 	cmd.Flags().StringVar(&flags.Path, "path", "", "Request path")
-	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional)")
-	cmd.Flags().StringVar(&flags.Xml, "xml", "", "XML body (optional)")
+	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional, mutually exclusive with --xml and --file)")
+	cmd.Flags().StringVar(&flags.Xml, "xml", "", "XML body (optional, mutually exclusive with --json and --file)")
+	cmd.Flags().StringArrayVar(&flags.Files, "file", []string{}, "File upload (format: fieldName:path/to/file.pdf, mutually exclusive with --json and --xml)")
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
 	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
 	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname path)")
@@ -204,10 +216,10 @@ func promptForRequiredFlags(flags *addCmdFlags) error {
 }
 
 func promptForOptionalFlags(flags *addCmdFlags) error {
-	if flags.Json == "" && flags.Xml == "" && flags.Method != "GET" {
-		// Ask user if they want JSON or XML
-		bodyTypeOptions := huh.NewOptions("json", "xml", "none")
-		bodyType, err := cli.PromptForOption("Request body type (json/xml/none)", bodyTypeOptions, false)
+	if flags.Json == "" && flags.Xml == "" && len(flags.Files) == 0 && flags.Method != "GET" {
+		// Ask user if they want JSON, XML, or Files
+		bodyTypeOptions := huh.NewOptions("json", "xml", "files", "none")
+		bodyType, err := cli.PromptForOption("Request body type (json/xml/files/none)", bodyTypeOptions, false)
 		if err != nil {
 			return err
 		}
@@ -225,6 +237,10 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 			if err != nil {
 				return err
 			}
+		case "files":
+			if err := promptForFiles(flags); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -240,6 +256,48 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 		}
 	}
 
+	return nil
+}
+
+func promptForFiles(flags *addCmdFlags) error {
+	files := []string{}
+
+	for {
+		// Prompt for field name
+		fieldName, err := cli.PromptForString("File field name (e.g., avatar, document)", "file", true)
+		if err != nil {
+			return err
+		}
+		fieldName = strings.TrimSpace(fieldName)
+		if fieldName == "" {
+			break
+		}
+
+		// Prompt for file path
+		filepath, err := cli.PromptForString("File path (relative to veriflow.json)", "test-files/sample.pdf", true)
+		if err != nil {
+			return err
+		}
+		filepath = strings.TrimSpace(filepath)
+		if filepath == "" {
+			break
+		}
+
+		// Add to files list in format "fieldName:path"
+		fileSpec := fmt.Sprintf("%s:%s", fieldName, filepath)
+		files = append(files, fileSpec)
+
+		// Ask if they want to add another file
+		addAnother, err := cli.PromptForBool("Add another file?")
+		if err != nil {
+			return err
+		}
+		if !addAnother {
+			break
+		}
+	}
+
+	flags.Files = files
 	return nil
 }
 
@@ -374,6 +432,21 @@ func promptForExports(flags *addCmdFlags) error {
 }
 
 func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) {
+	// Make sure only one body type is sent
+	bodyCount := 0
+	if flags.Json != "" {
+		bodyCount++
+	}
+	if flags.Xml != "" {
+		bodyCount++
+	}
+	if len(flags.Files) > 0 {
+		bodyCount++
+	}
+	if bodyCount > 1 {
+		return nil, oops.Err(oops.ErrInvalidInput, "--json, --xml, and --file flags are mutually exclusive", nil)
+	}
+
 	var parsedJson map[string]any = nil
 	if flags.Json != "" {
 		if err := json.Unmarshal([]byte(flags.Json), &parsedJson); err != nil {
@@ -402,6 +475,23 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
 	if flags.Xml != "" {
 		request.Xml = Some(flags.Xml)
+	}
+	if len(flags.Files) > 0 {
+		// Parse files format "fieldName:path/to/file.pdf" into map
+		filesMap := make(map[string]string)
+		for _, fileSpec := range flags.Files {
+			parts := strings.SplitN(fileSpec, ":", 2)
+			if len(parts) != 2 {
+				return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("invalid file format: %s (expected fieldName:path)", fileSpec), nil)
+			}
+			fieldName := strings.TrimSpace(parts[0])
+			filePath := strings.TrimSpace(parts[1])
+			if fieldName == "" || filePath == "" {
+				return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("invalid file format: %s (field name and path cannot be empty)", fileSpec), nil)
+			}
+			filesMap[fieldName] = filePath
+		}
+		request.Files = Some(filesMap)
 	}
 
 	exports, err := BuildExportsFromExpressions(flags.ExportExpressions)

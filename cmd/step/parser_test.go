@@ -47,10 +47,10 @@ func TestBuildAssertObjectFromExpressions(t *testing.T) {
 
 	t.Run("rejects invalid syntax", func(t *testing.T) {
 		invalid := []string{
-			"",              // empty
+			"",               // empty
 			"unknown $.path", // invalid keyword
-			"exists",        // missing jsonpath
-			"equals $.path", // missing value
+			"exists",         // missing jsonpath
+			"equals $.path",  // missing value
 		}
 
 		for _, expr := range invalid {

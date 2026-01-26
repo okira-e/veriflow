@@ -99,7 +99,7 @@ Veriflow automatically detects response content types and uses the appropriate p
 - **JSON**: Uses JSONPath for assertions and exports (e.g., `$.data.user.id`)
 - **XML**: Uses XPath for assertions and exports (e.g., `/response/data/user/id`)
 
-You can send either JSON or XML in your requests using the `json` or `xml` fields.
+You can send JSON, XML, or files in your requests using the `json`, `xml`, or `files` fields.
 
 ### Installation
 
@@ -193,6 +193,7 @@ The configuration file (`veriflow.json`) has the following structure:
 | `path`           | string  | Yes      | Request path (appended to baseUrl)                         |
 | `json`           | object  | No       | JSON request body                                          |
 | `xml`            | string  | No       | XML request body (alternative to json)                     |
+| `files`          | object  | No       | File uploads (map of fieldName to relative file path)      |
 | `disableHeaders` | boolean | No       | If true, disables automatic cookie handling                |
 
 #### Assert Object
@@ -318,13 +319,14 @@ veriflow run --json-output --no-color --non-interactive
 
 Export flows or steps to external request formats (e.g., curl commands) for inspection or manual execution.
 
-| Flag         | Description                                        |
-| ------------ | -------------------------------------------------- |
-| `--to`       | Export format (currently only "curl" supported)    |
-| `--out`      | Write output to file instead of stdout             |
-| `--base-url` | Override the baseUrl from config                   |
+| Flag         | Description                                     |
+| ------------ | ----------------------------------------------- |
+| `--to`       | Export format (currently only "curl" supported) |
+| `--out`      | Write output to file instead of stdout          |
+| `--base-url` | Override the baseUrl from config                |
 
 **Output format:**
+
 - Single target: outputs raw curl command
 - Multiple targets: outputs JSON array with `stepName` and `curl` fields
 
@@ -350,6 +352,10 @@ veriflow export user-onboarding --base-url http://staging.example.com
 
 # Explicit format (curl is default)
 veriflow export --to curl user-onboarding
+
+# Export step with file upload
+veriflow export user-onboarding/upload-avatar
+# Output: curl -X 'POST' 'https://api.example.com/users/avatar' -F 'avatar=@test-files/avatar.jpg'
 ```
 
 #### veriflow flow add
@@ -408,19 +414,35 @@ veriflow step add register \
   --assert "isNot $.data.stats PENDING" \
   --export "user_id $.data.id" \
   --non-interactive
+
+# With file upload
+veriflow step add upload-avatar \
+  --flow user-onboarding \
+  --method POST \
+  --path /users/avatar \
+  --file "avatar:test-files/avatar.jpg" \
+  --status 200
 ```
 
-| Flag        | Description                       |
-| ----------- | --------------------------------- |
-| `--flow`    | Flow this step belongs to         |
-| `--method`  | HTTP method                       |
-| `--path`    | Request path                      |
-| `--json`    | JSON body                         |
-| `--xml`     | XML body                          |
-| `--status`  | Expected HTTP status code         |
-| `--assert`  | Assertion expression (repeatable) |
-| `--export`  | Export expression (repeatable)    |
-| `--no-save` | Modify config in memory only      |
+| Flag        | Description                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `--flow`    | Flow this step belongs to                                                                                     |
+| `--method`  | HTTP method                                                                                                   |
+| `--path`    | Request path                                                                                                  |
+| `--json`    | JSON body (mutually exclusive with --xml and --file)                                                          |
+| `--xml`     | XML body (mutually exclusive with --json and --file)                                                          |
+| `--file`    | File upload (format: fieldName:path, mutually exclusive with --json and --xml, repeatable for multiple files) |
+| `--status`  | Expected HTTP status code                                                                                     |
+| `--assert`  | Assertion expression (repeatable)                                                                             |
+| `--export`  | Export expression (repeatable)                                                                                |
+| `--no-save` | Modify config in memory only                                                                                  |
+
+**Note on file uploads:**
+
+- File paths are relative to the config file location (veriflow.json)
+- Files must be under 100MB in size
+- Multiple files can be uploaded: `--file "doc:file1.pdf" --file "image:file2.jpg"`
+- MIME types are auto-detected from file extensions
 
 Assertion syntax (supports both JSONPath and XPath):
 

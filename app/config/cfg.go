@@ -12,13 +12,14 @@ import (
 )
 
 type Cfg struct {
-	Version     string      `json:"version"`
-	ProjectName string      `json:"projectName"`
-	BaseUrl     string      `json:"baseUrl"`
-	BeforeRun   []string    `json:"beforeRun"`
-	Flows       []*app.Flow `json:"flows"`
-	AfterRun    []string    `json:"afterRun"`
-	flowsIdx    map[string]int
+	Version        string      `json:"version"`
+	ProjectName    string      `json:"projectName"`
+	BaseUrl        string      `json:"baseUrl"`
+	BeforeRun      []string    `json:"beforeRun"`
+	Flows          []*app.Flow `json:"flows"`
+	AfterRun       []string    `json:"afterRun"`
+	flowsIdx       map[string]int
+	configFilePath string // absolute path to the config file (for resolving relative file paths)
 }
 
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
@@ -123,89 +124,11 @@ func (self *Cfg) buildFlowsIndex() {
 	}
 }
 
-/*
-project file-io
-base http://localhost:3000/api
-
-flow init # Define the first flow.
-
-step add-storage
-  POST /storages
-  body:
-    name = seaweed-local
-    driver.type = s3
-    driver.options.bucket = play
-    driver.options.endpoint = http://localhost:8333
-    driver.options.forcePathStyle = true
-    driver.options.region = global
-    driver.options.credentials.accessKeyId = accessMe
-    driver.options.credentials.secretAccessKey = tellmeyoursecret
-
-  expect status 201
-  expect json $.data exists
-  expect json $.data.name = seaweed-local
-
-  export storage_id = $.data.id
-
-
-step set-default
-  POST /settings
-  body:
-    key = defaultStorage
-    value = {{storage_id}}
-
-  expect status 201
-
-
-step add-storage-tier
-  POST /storage-tiers
-  body:
-    name = hot
-    threshold = 0.8
-    storageId = {{storage_id}}
-
-  expect status 201
-
-
-flow errors
-
-step file-not-found
-  GET /files/00000000-0000-0000-0000-000000000000
-
-  expect status 404
-  expect json $.code = METADATA_NOT_FOUND
-  expect json $.message exists
-
-
-step file-source-not-found
-  GET /files/00000000-0000-0000-0000-000000000000/source
-
-  expect status 404
-  expect json $.code = METADATA_NOT_FOUND
-
-
-step storage-not-found
-  GET /storages/00000000-0000-0000-0000-000000000000
-
-  expect status 404
-  expect json $.code = STORAGE_NOT_FOUND
-
-
-step move-file-storage-not-found
-  POST /files/move
-  body:
-    fileId = 00000000-0000-0000-0000-000000000001
-    destStorageId = 00000000-0000-0000-0000-000000000002
-
-  expect status 404
-  expect json $.code = METADATA_NOT_FOUND
-
-
-step invalid-input-missing-fields
-  POST /storages
-  body:
-    name = incomplete-storage
-
-  expect status 400
-  expect json $.code = INVALID_INPUT
-*/
+// GetConfigDir returns the directory containing the config file.
+// Used for resolving relative file paths in file uploads.
+func (self *Cfg) GetConfigDir() string {
+	if self.configFilePath == "" {
+		return ""
+	}
+	return filepath.Dir(self.configFilePath)
+}

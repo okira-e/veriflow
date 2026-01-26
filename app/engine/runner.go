@@ -9,8 +9,12 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -89,7 +93,7 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 
 	var body io.Reader
 	var contentType string
-	
+
 	if step.Request.Json.IsSome() {
 		payload := step.Request.Json.Unwrap()
 		b, err := json.Marshal(payload)
@@ -102,6 +106,70 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 		xmlData := step.Request.Xml.Unwrap()
 		body = bytes.NewReader([]byte(xmlData))
 		contentType = "application/xml"
+	} else if step.Request.Files.IsSome() {
+		// Handle file uploads with multipart/form-data
+		files := step.Request.Files.Unwrap()
+
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+
+		configDir := self.settings.Cfg.GetConfigDir()
+		if configDir == "" {
+			return []byte{}, oops.Err(oops.Internal, "config directory not available for resolving file paths", nil)
+		}
+
+		for fieldName, relativePath := range files {
+			// Resolve relative path to absolute path
+			absolutePath := filepath.Join(configDir, relativePath)
+
+			// Check file size (100MB limit)
+			const maxFileSize = 100 * 1024 * 1024 // 100MB
+			fileInfo, err := os.Stat(absolutePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return []byte{}, oops.Err(oops.FileNotFound, fmt.Sprintf("file not found: %s", relativePath), err)
+				}
+				return []byte{}, oops.Err(oops.FileReadError, fmt.Sprintf("failed to stat file: %s", relativePath), err)
+			}
+
+			if fileInfo.Size() > maxFileSize {
+				return []byte{}, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("file too large: %s (%.2f MB, max 100MB)", relativePath, float64(fileInfo.Size())/(1024*1024)), nil)
+			}
+
+			// Open file
+			file, err := os.Open(absolutePath)
+			if err != nil {
+				return []byte{}, oops.Err(oops.FileReadError, fmt.Sprintf("failed to open file: %s", relativePath), err)
+			}
+			defer file.Close()
+
+			// Auto-detect MIME type from file extension (like curl does)
+			mimeType := mime.TypeByExtension(filepath.Ext(absolutePath))
+			if mimeType == "" {
+				mimeType = "application/octet-stream"
+			}
+
+			// Create form file
+			part, err := writer.CreateFormFile(fieldName, filepath.Base(absolutePath))
+			if err != nil {
+				return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to create multipart form file", err)
+			}
+
+			// Copy file content to part
+			_, err = io.Copy(part, file)
+			if err != nil {
+				return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to copy file content", err)
+			}
+		}
+
+		// Close the writer to finalize the multipart message
+		err := writer.Close()
+		if err != nil {
+			return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to close multipart writer", err)
+		}
+
+		body = &buf
+		contentType = writer.FormDataContentType()
 	}
 
 	url := fmt.Sprintf("%s%s", self.settings.getBaseUrl(), step.Request.Path)
@@ -270,7 +338,7 @@ func (self *Runner) resolveBindingFromString(s string) string {
 
 func (self *Runner) processExports(exports app.Exports, responseBody []byte, contentType string) error {
 	isXML := strings.Contains(strings.ToLower(contentType), "xml")
-	
+
 	if isXML {
 		return self.processXMLExports(exports, responseBody)
 	}

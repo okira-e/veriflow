@@ -130,6 +130,45 @@ func TestConvertStepToCurl(t *testing.T) {
 				assertContains(baseUrl),
 			},
 		},
+		{
+			name: "single file upload",
+			step: &app.Step{
+				Name: "upload-file",
+				Request: app.Request{
+					Method: "POST",
+					Path:   "/upload",
+					Files:  Some(map[string]string{"document": "test-files/sample.pdf"}),
+				},
+			},
+			assertions: []func(t *testing.T, out string){
+				assertContains("POST"),
+				assertContains("/upload"),
+				assertContains("-F"),
+				assertContains("document=@test-files/sample.pdf"),
+			},
+		},
+		{
+			name: "multiple file uploads",
+			step: &app.Step{
+				Name: "upload-multiple",
+				Request: app.Request{
+					Method: "POST",
+					Path:   "/batch-upload",
+					Files: Some(map[string]string{
+						"avatar": "images/avatar.jpg",
+						"resume": "docs/resume.pdf",
+					}),
+				},
+			},
+			assertions: []func(t *testing.T, out string){
+				assertContains("POST"),
+				assertContains("/batch-upload"),
+				assertAnyOf(
+					assertContains("avatar=@images/avatar.jpg"),
+					assertContains("resume=@docs/resume.pdf"),
+				),
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -26,11 +26,13 @@ type StepOptions struct {
 }
 
 type Request struct {
-	Method         string                 `json:"method"`
-	Path           string                 `json:"path"`
-	Json           Option[map[string]any] `json:"json"`
-	Xml            Option[string]         `json:"xml"`
-	DisableHeaders bool                   `json:"disableHeaders"`
+	Method         string                    `json:"method"`
+	Path           string                    `json:"path"`
+	Json           Option[map[string]any]    `json:"json"`
+	Xml            Option[string]            `json:"xml"`
+	// Files stores the files to upload to the server by fieldName -> relativePath (relative to config file)
+	Files          Option[map[string]string] `json:"files"`
+	DisableHeaders bool                      `json:"disableHeaders"`
 }
 
 func NewRequest(method string, path string, json map[string]any) Request {

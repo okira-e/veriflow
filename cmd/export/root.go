@@ -174,6 +174,16 @@ func convertStepToCurl(step *app.Step, baseURL string) (string, error) {
 		b.WriteString(shellEscape(step.Request.Xml.Unwrap()))
 	}
 
+	// Files (multipart/form-data)
+	if step.Request.Files.IsSome() {
+		files := step.Request.Files.Unwrap()
+		for fieldName, filePath := range files {
+			b.WriteString(" -F ")
+			// Format: fieldName=@path/to/file
+			b.WriteString(shellEscape(fieldName + "=@" + filePath))
+		}
+	}
+
 	// Timeout (curl is seconds, rounded up)
 	if step.Options.Timeout.IsSome() {
 		d, err := time.ParseDuration(step.Options.Timeout.Unwrap())
