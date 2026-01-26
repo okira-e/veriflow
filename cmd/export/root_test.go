@@ -169,6 +169,66 @@ func TestConvertStepToCurl(t *testing.T) {
 				),
 			},
 		},
+		{
+			name: "single custom header",
+			step: &app.Step{
+				Name: "with-auth",
+				Request: app.Request{
+					Method:  "GET",
+					Path:    "/protected",
+					Headers: Some(map[string]string{"Authorization": "Bearer token123"}),
+				},
+			},
+			assertions: []func(t *testing.T, out string){
+				assertContains("GET"),
+				assertContains("/protected"),
+				assertContains("-H"),
+				assertContains("Authorization: Bearer token123"),
+			},
+		},
+		{
+			name: "multiple custom headers",
+			step: &app.Step{
+				Name: "with-headers",
+				Request: app.Request{
+					Method: "POST",
+					Path:   "/api",
+					Json:   Some(map[string]any{"data": "test"}),
+					Headers: Some(map[string]string{
+						"Authorization": "Bearer token",
+						"X-API-Key":     "secret",
+					}),
+				},
+			},
+			assertions: []func(t *testing.T, out string){
+				assertContains("POST"),
+				assertContains("/api"),
+				assertContains("application/json"),
+				assertAnyOf(
+					assertContains("Authorization: Bearer token"),
+					assertContains("X-API-Key: secret"),
+				),
+			},
+		},
+		{
+			name: "custom header overrides auto Content-Type",
+			step: &app.Step{
+				Name: "override-content-type",
+				Request: app.Request{
+					Method:  "POST",
+					Path:    "/custom",
+					Json:    Some(map[string]any{"data": "test"}),
+					Headers: Some(map[string]string{"Content-Type": "text/plain"}),
+				},
+			},
+			assertions: []func(t *testing.T, out string){
+				assertContains("POST"),
+				assertContains("/custom"),
+				// Both headers should appear, but custom one comes after
+				assertContains("Content-Type: application/json"),
+				assertContains("Content-Type: text/plain"),
+			},
+		},
 	}
 
 	for _, tt := range tests {

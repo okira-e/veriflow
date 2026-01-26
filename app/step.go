@@ -32,6 +32,8 @@ type Request struct {
 	Xml            Option[string]            `json:"xml"`
 	// Files stores the files to upload to the server by fieldName -> relativePath (relative to config file)
 	Files          Option[map[string]string] `json:"files"`
+	// Headers stores custom HTTP headers to send with the request (headerName -> value)
+	Headers        Option[map[string]string] `json:"headers"`
 	DisableHeaders bool                      `json:"disableHeaders"`
 }
 

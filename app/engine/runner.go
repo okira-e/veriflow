@@ -182,6 +182,14 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 		req.Header.Set("Content-Type", contentType)
 	}
 
+	// Apply custom headers (these can override auto-headers like Content-Type)
+	if step.Request.Headers.IsSome() {
+		headers := step.Request.Headers.Unwrap()
+		for headerName, headerValue := range headers {
+			req.Header.Set(headerName, headerValue)
+		}
+	}
+
 	// Send the request
 
 	client := http.DefaultClient

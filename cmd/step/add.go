@@ -24,6 +24,7 @@ type addCmdFlags struct {
 	Json              string
 	Xml               string
 	Files             []string // format: "fieldName:path/to/file.pdf"
+	Headers           []string // format: "Header-Name:value"
 	Status            int      `validate:"required,gt=99,lt=600"`
 	NoSave            bool
 	AssertExpressions []string
@@ -48,6 +49,15 @@ File uploads (mutually exclusive with --json and --xml):
   - Paths are relative to veriflow.json location
   - Files must be under 100MB
   - MIME types auto-detected from file extension
+
+Custom headers:
+  --header <Header-Name>:<value>
+    Example: --header "Authorization:Bearer token123"
+    Example: --header "X-API-Key:secret" --header "Accept:application/json"
+
+  Notes:
+  - Custom headers can override auto-generated headers (e.g., Content-Type)
+  - Use with any request type (json/xml/files)
 
 Assertions syntax (JSON with JSONPath or XML with XPath):
   exists <path>
@@ -85,6 +95,7 @@ Exports syntax (JSONPath for JSON, XPath for XML):
 	cmd.Flags().StringVar(&flags.Json, "json", "", "JSON body (optional, mutually exclusive with --xml and --file)")
 	cmd.Flags().StringVar(&flags.Xml, "xml", "", "XML body (optional, mutually exclusive with --json and --file)")
 	cmd.Flags().StringArrayVar(&flags.Files, "file", []string{}, "File upload (format: fieldName:path/to/file.pdf, mutually exclusive with --json and --xml)")
+	cmd.Flags().StringArrayVar(&flags.Headers, "header", []string{}, "Custom HTTP header (format: Header-Name:value, repeatable)")
 	cmd.Flags().IntVar(&flags.Status, "status", 0, "Asserted HTTP status code")
 	cmd.Flags().StringArrayVar(&flags.AssertExpressions, "assert", []string{}, "Asserted result body")
 	cmd.Flags().StringArrayVar(&flags.ExportExpressions, "export", []string{}, "Export variable from response (format: varname path)")
@@ -256,6 +267,12 @@ func promptForOptionalFlags(flags *addCmdFlags) error {
 		}
 	}
 
+	if len(flags.Headers) == 0 {
+		if err := promptForHeaders(flags); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -298,6 +315,95 @@ func promptForFiles(flags *addCmdFlags) error {
 	}
 
 	flags.Files = files
+	return nil
+}
+
+func promptForHeaders(flags *addCmdFlags) error {
+	addHeaders, err := cli.PromptForBool("Add custom headers?")
+	if err != nil {
+		return err
+	}
+
+	if !addHeaders {
+		return nil
+	}
+
+	headers := []string{}
+
+	for {
+		// Prompt for header type (common ones + custom)
+		headerTypeOptions := huh.NewOptions("Authorization", "X-API-Key", "Accept", "Content-Type", "Custom")
+		headerType, err := cli.PromptForOption("Header type", headerTypeOptions, true)
+		if err != nil {
+			return err
+		}
+
+		var headerName, headerValue string
+
+		switch headerType {
+		case "Authorization":
+			headerName = "Authorization"
+			headerValue, err = cli.PromptForString("Authorization value (e.g., Bearer token123)", "Bearer token123", true)
+			if err != nil {
+				return err
+			}
+		case "X-API-Key":
+			headerName = "X-API-Key"
+			headerValue, err = cli.PromptForString("API Key value", "your-api-key", true)
+			if err != nil {
+				return err
+			}
+		case "Accept":
+			headerName = "Accept"
+			acceptOptions := huh.NewOptions("application/json", "application/xml", "text/html", "*/*")
+			headerValue, err = cli.PromptForOption("Accept value", acceptOptions, false)
+			if err != nil {
+				return err
+			}
+		case "Content-Type":
+			headerName = "Content-Type"
+			headerValue, err = cli.PromptForString("Content-Type value", "application/json", true)
+			if err != nil {
+				return err
+			}
+		case "Custom":
+			headerName, err = cli.PromptForString("Header name", "X-Custom-Header", true)
+			if err != nil {
+				return err
+			}
+			headerName = strings.TrimSpace(headerName)
+			if headerName == "" {
+				continue
+			}
+
+			headerValue, err = cli.PromptForString("Header value", "", true)
+			if err != nil {
+				return err
+			}
+		default:
+			continue
+		}
+
+		headerValue = strings.TrimSpace(headerValue)
+		if headerValue == "" {
+			break
+		}
+
+		// Add to headers list in format "Header-Name:value"
+		headerSpec := fmt.Sprintf("%s:%s", headerName, headerValue)
+		headers = append(headers, headerSpec)
+
+		// Ask if they want to add another header
+		addAnother, err := cli.PromptForBool("Add another header?")
+		if err != nil {
+			return err
+		}
+		if !addAnother {
+			break
+		}
+	}
+
+	flags.Headers = headers
 	return nil
 }
 
@@ -492,6 +598,23 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 			filesMap[fieldName] = filePath
 		}
 		request.Files = Some(filesMap)
+	}
+	if len(flags.Headers) > 0 {
+		// Parse headers format "Header-Name:value" into map
+		headersMap := make(map[string]string)
+		for _, headerSpec := range flags.Headers {
+			parts := strings.SplitN(headerSpec, ":", 2)
+			if len(parts) != 2 {
+				return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("invalid header format: %s (expected Header-Name:value)", headerSpec), nil)
+			}
+			headerName := strings.TrimSpace(parts[0])
+			headerValue := strings.TrimSpace(parts[1])
+			if headerName == "" || headerValue == "" {
+				return nil, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("invalid header format: %s (header name and value cannot be empty)", headerSpec), nil)
+			}
+			headersMap[headerName] = headerValue
+		}
+		request.Headers = Some(headersMap)
 	}
 
 	exports, err := BuildExportsFromExpressions(flags.ExportExpressions)

@@ -158,6 +158,16 @@ func convertStepToCurl(step *app.Step, baseURL string) (string, error) {
 		}
 	}
 
+	// Custom headers (added after auto-headers so they can override)
+	if step.Request.Headers.IsSome() {
+		headers := step.Request.Headers.Unwrap()
+		for headerName, headerValue := range headers {
+			b.WriteString(" -H ")
+			// Format: -H "Header-Name: value" (with space after colon)
+			b.WriteString(shellEscape(headerName + ": " + headerValue))
+		}
+	}
+
 	// Body
 	if step.Request.Json.IsSome() {
 		payload := step.Request.Json.Unwrap()

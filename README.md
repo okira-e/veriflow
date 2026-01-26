@@ -194,6 +194,7 @@ The configuration file (`veriflow.json`) has the following structure:
 | `json`           | object  | No       | JSON request body                                          |
 | `xml`            | string  | No       | XML request body (alternative to json)                     |
 | `files`          | object  | No       | File uploads (map of fieldName to relative file path)      |
+| `headers`        | object  | No       | Custom HTTP headers (map of header name to value)          |
 | `disableHeaders` | boolean | No       | If true, disables automatic cookie handling                |
 
 #### Assert Object
@@ -422,6 +423,15 @@ veriflow step add upload-avatar \
   --path /users/avatar \
   --file "avatar:test-files/avatar.jpg" \
   --status 200
+
+# With custom headers
+veriflow step add protected-endpoint \
+  --flow user-onboarding \
+  --method GET \
+  --path /api/protected \
+  --header "Authorization:Bearer token123" \
+  --header "X-API-Key:secret" \
+  --status 200
 ```
 
 | Flag        | Description                                                                                                   |
@@ -432,6 +442,7 @@ veriflow step add upload-avatar \
 | `--json`    | JSON body (mutually exclusive with --xml and --file)                                                          |
 | `--xml`     | XML body (mutually exclusive with --json and --file)                                                          |
 | `--file`    | File upload (format: fieldName:path, mutually exclusive with --json and --xml, repeatable for multiple files) |
+| `--header`  | Custom HTTP header (format: Header-Name:value, repeatable)                                                    |
 | `--status`  | Expected HTTP status code                                                                                     |
 | `--assert`  | Assertion expression (repeatable)                                                                             |
 | `--export`  | Export expression (repeatable)                                                                                |
