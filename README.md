@@ -25,6 +25,50 @@ Veriflow is a simple yet powerful CLI tool for defining and running end-to-end A
 
 ## Overview
 
+```json
+{
+    "baseUrl": "http://localhost:8080",
+    "flows": {
+        "user-auth": {
+            "steps": [
+                {
+                    "name": "register",
+                    "request": {
+                        "method": "POST",
+                        "path": "/api/auth/v3/register",
+                        "json": {
+                            "email": "user+{{RUN_ID}}@example.com", // RUN ID injectable
+                            "password": "secret"
+                        }
+                    },
+                    "assert": {
+                        "status": 201,
+                        "all": [{ "jsonpath": "$.data.username", "exists": true }]
+                    },
+                    "exports": { "username": "$.data.username" } // Export variable for next requests
+                },
+                {
+                    "name": "login", // auth headers/cookies are persisted automatically
+                    "request": {
+                        "method": "POST",
+                        "path": "/api/auth/v3/login",
+                        "json": {
+                            "username": "{{bind:username}}", // Use a defined var
+                            "password": "secret"
+                        }
+                    },
+                    "assert": {
+                        "status": 200,
+                        "all": [{ "jsonpath": "$.data.email", "contains": "{{RUN_ID}}" }]
+                    }
+                },
+                // ...
+            ]
+        }
+    }
+}
+```
+
 ### Why Veriflow
 
 Because it's the simplest form of targeted flow testing that:
