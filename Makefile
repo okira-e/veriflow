@@ -8,9 +8,9 @@ COMMIT  := $(shell git rev-parse --short HEAD)
 BUILT   := $(shell date -u +%Y-%m-%d)
 
 LDFLAGS := -s -w \
-	-X veriflow/app/version.Version=$(VERSION) \
-	-X veriflow/app/version.Commit=$(COMMIT) \
-	-X veriflow/app/version.Built=$(BUILT)
+	-X github.com/okira-e/veriflow/app/version.Version=$(VERSION) \
+	-X github.com/okira-e/veriflow/app/version.Commit=$(COMMIT) \
+	-X github.com/okira-e/veriflow/app/version.Built=$(BUILT)
 
 build:
 	go build -o bin/debug/$(APP) .
