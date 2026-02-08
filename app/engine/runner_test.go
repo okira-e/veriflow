@@ -98,6 +98,27 @@ func TestRunner_BuiltInBindings(t *testing.T) {
 			capturedEmail = email
 		}
 
+		if nested, ok := data["nested"].([]any); ok {
+			if len(nested) > 0 {
+				if obj, ok := nested[0].(map[string]any); ok {
+					if val, ok := obj["key"].(string); ok {
+						fmt.Println("VAL: ", val)
+						if strings.Contains(val, "{{RUN_ID}}") {
+							t.Error("RUN_ID was not replaced in nested key")
+						}
+					} else {
+						t.Error("key field missing in nested object")
+					}
+				} else {
+					t.Error("nested array should contain objects")
+				}
+			} else {
+				t.Error("nested array should not be empty")
+			}
+		} else {
+			t.Error("nested field should be an array")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]any{"success": true})
 	}))
@@ -107,8 +128,13 @@ func TestRunner_BuiltInBindings(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("test",
-		app.NewRequest("POST", "/register", map[string]any{
+		app.NewRequest("POST", "/test", map[string]any{
 			"email": "test-{{RUN_ID}}@example.com",
+			"nested": []any{
+				map[string]string{
+					"key": "value-{{RUN_ID}}",
+				},
+			},
 		}),
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},

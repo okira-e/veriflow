@@ -263,7 +263,7 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 		if err != nil {
 			return oops.Err(oops.StepRequestProcessingFailed, "failed to process request body", err)
 		}
-		step.Request.Json = Some(processedRequestBody)
+		step.Request.Json = Some(processedRequestBody.(map[string]any))
 	} else if step.Request.Xml.IsSome() {
 		xmlData := step.Request.Xml.Unwrap()
 		step.Request.Xml = Some(self.resolveBindingFromString(xmlData))
@@ -288,30 +288,39 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.
-func (self *Runner) processRequestBody(body map[string]any) (map[string]any, error) {
-	var err error
-
-	for k, v := range body {
-		switch val := v.(type) {
-		case string:
-			body[k] = self.resolveBindingFromString(val)
-		case map[string]any:
-			body[k], err = self.processRequestBody(val)
+func (self *Runner) processRequestBody(v any) (any, error) {
+	switch val := v.(type) {
+	case string:
+		return self.resolveBindingFromString(val), nil
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, v := range val {
+			processed, err := self.processRequestBody(v)
 			if err != nil {
-				return nil, oops.Err(oops.StepRequestProcessingFailed, "failed to process/modify request body", err)
+				return nil, err
 			}
-		// optionally handle []any if you expect arrays
-		case []any:
-			for i, elem := range val {
-				if s, ok := elem.(string); ok {
-					val[i] = self.resolveBindingFromString(s)
-				}
-			}
-			body[k] = val
+			result[k] = processed
 		}
+		return result, nil
+	case map[string]string:
+		result := make(map[string]any, len(val))
+		for k, v := range val {
+			result[k] = self.resolveBindingFromString(v)
+		}
+		return result, nil
+	case []any:
+		result := make([]any, len(val))
+		for i, elem := range val {
+			processed, err := self.processRequestBody(elem)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = processed
+		}
+		return result, nil
+	default:
+		return val, nil
 	}
-
-	return body, nil
 }
 
 // resolveBindingFromString takes a string and replaces any injectable bindings built-in or defined
