@@ -626,7 +626,7 @@ func TestIntegration_LongFlowStability(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	numSteps := 15
-	for i := 1; i <= numSteps; i++ {
+	for i := 1; i <= numSteps; i += 1 {
 		exportKey := fmt.Sprintf("val%d", i)
 		step := app.NewStep(
 			fmt.Sprintf("step%d", i),

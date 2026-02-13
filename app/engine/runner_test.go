@@ -615,7 +615,7 @@ func TestRunner_StepsRanCounter(t *testing.T) {
 		t.Errorf("expected 0 steps initially, got %d", runner.StepsRan())
 	}
 
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 5; i += 1 {
 		step := app.NewStep(fmt.Sprintf("step%d", i),
 			app.NewRequest("GET", "/test", nil),
 			app.NewAssert(200, None[[]*app.Assertion]()),
@@ -631,24 +631,54 @@ func TestRunner_StepsRanCounter(t *testing.T) {
 
 func TestRunner_EmptyResponseBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-		// No body
+		if r.Method == "DELETE" {
+			w.WriteHeader(http.StatusNoContent)
+			// No body
+		} else {
+			w.WriteHeader(http.StatusOK)
+			// No body
+		}
 	}))
 	defer server.Close()
 
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
-	step := app.NewStep("test",
-		app.NewRequest("DELETE", "/resource", nil),
-		app.NewAssert(204, None[[]*app.Assertion]()),
-		app.Exports{},
-	)
+	t.Run("DELETE with 204 No Content", func(t *testing.T) {
+		step := app.NewStep("test",
+			app.NewRequest("DELETE", "/resource", nil),
+			app.NewAssert(204, None[[]*app.Assertion]()),
+			app.Exports{},
+		)
 
-	_, err := runner.Execute(step)
-	if err != nil {
-		t.Fatalf("expected no error with empty body, got %v", err)
-	}
+		_, err := runner.Execute(step)
+		if err != nil {
+			t.Fatalf("expected no error with empty body, got %v", err)
+		}
+	})
+
+	t.Run("Unexpected empty body with 200 OK", func(t *testing.T) {
+		step := app.NewStep("test",
+			app.NewRequest("GET", "/resource", nil),
+			app.NewAssert(
+				200,
+				Some([]*app.Assertion{
+					{
+						JsonPath: "$.data",
+						Exists:   Some(true),
+					},
+				}),
+			),
+			app.Exports{},
+		)
+
+		_, err := runner.Execute(step)
+		jsonData, _ := json.Marshal(err)
+		fmt.Println("ERROR: ", string(jsonData))
+		if _, isAF := err.(*AssertionFailure); err != nil && !isAF {
+			t.Fatalf("expected assertion failure with empty body but got another error: %v", err)
+		}
+	})
 }
 
 func TestRunner_ExportFailure(t *testing.T) {
@@ -730,7 +760,7 @@ func TestRunner_RunIdConsistency(t *testing.T) {
 	}
 
 	// Execute multiple steps
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 3; i += 1 {
 		step := app.NewStep(fmt.Sprintf("step%d", i),
 			app.NewRequest("GET", "/test", nil),
 			app.NewAssert(200, None[[]*app.Assertion]()),

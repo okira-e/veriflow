@@ -187,19 +187,19 @@ func stepKey(flowName string, stepName string) string {
 func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunOptions) (int, error) {
 	failures := 0
 
-	for _, sr := range steps {
+	for _, target := range steps {
 		opts.Printer.Styled(logging.Info, logging.Grey, "Running ", false)
-		opts.Printer.Print(logging.Info, fmt.Sprintf("%s/%s...", sr.Flow.Name, sr.Step.Name))
+		opts.Printer.Print(logging.Info, fmt.Sprintf("%s/%s...", target.Flow.Name, target.Step.Name))
 
-		resp, err := runner.Execute(sr.Step)
+		resp, err := runner.Execute(target.Step)
 
 		if err != nil {
 			var af *engine.AssertionFailure
 			isAssertionFailure := errors.As(err, &af)
 
 			if isAssertionFailure {
-				failures++
-				af.Flow = sr.Flow
+				failures += 1
+				af.Flow = target.Flow
 			}
 
 			opts.Printer.Styled(logging.Info, logging.Red, "FAILED", true)

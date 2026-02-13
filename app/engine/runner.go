@@ -72,7 +72,8 @@ func NewRunner(settings RunnerSettings) *Runner {
 
 // Execute a step.
 //
-// Returns an AssertionFailure on an error caused from assertion failure which is not an actual error.
+// Returns the response in bytes and an error that couldbe an AssertionFailure that is a request assertion
+// failure which is not an actual error.
 func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	baseCtx := context.Background()
 	timeout := 30 * time.Second // have a default
