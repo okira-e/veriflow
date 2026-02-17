@@ -72,7 +72,7 @@ func NewRunner(settings RunnerSettings) *Runner {
 
 // Execute a step.
 //
-// Returns the response in bytes and an error that couldbe an AssertionFailure that is a request assertion
+// Returns the response in bytes and an error that could be an AssertionFailure that is a request assertion
 // failure which is not an actual error.
 func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	baseCtx := context.Background()
@@ -260,14 +260,21 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 	// Process body
 	if step.Request.Json.IsSome() {
 		requestBody := step.Request.Json.Unwrap()
-		processedRequestBody, err := self.processRequestBody(requestBody)
-		if err != nil {
-			return oops.Err(oops.StepRequestProcessingFailed, "failed to process request body", err)
-		}
-		step.Request.Json = Some(processedRequestBody.(map[string]any))
+		processedRequestBody := self.processRequestBody(requestBody)
+		step.Request.Json = Some(processedRequestBody)
 	} else if step.Request.Xml.IsSome() {
 		xmlData := step.Request.Xml.Unwrap()
 		step.Request.Xml = Some(self.resolveBindingFromString(xmlData))
+	}
+
+	// Process headers
+	if step.Request.Headers.IsSome() {
+		headers := step.Request.Headers.Unwrap()
+		processedHeaders := make(map[string]string, len(headers))
+		for headerName, headerValue := range headers {
+			processedHeaders[headerName] = self.resolveBindingFromString(headerValue)
+		}
+		step.Request.Headers = Some(processedHeaders)
 	}
 
 	// Process assertions
@@ -289,39 +296,12 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.
-func (self *Runner) processRequestBody(v any) (any, error) {
-	switch val := v.(type) {
-	case string:
-		return self.resolveBindingFromString(val), nil
-	case map[string]any:
-		result := make(map[string]any, len(val))
-		for k, v := range val {
-			processed, err := self.processRequestBody(v)
-			if err != nil {
-				return nil, err
-			}
-			result[k] = processed
-		}
-		return result, nil
-	case map[string]string:
-		result := make(map[string]any, len(val))
-		for k, v := range val {
-			result[k] = self.resolveBindingFromString(v)
-		}
-		return result, nil
-	case []any:
-		result := make([]any, len(val))
-		for i, elem := range val {
-			processed, err := self.processRequestBody(elem)
-			if err != nil {
-				return nil, err
-			}
-			result[i] = processed
-		}
-		return result, nil
-	default:
-		return val, nil
-	}
+func (self *Runner) processRequestBody(body any) map[string]any {
+	processedBody, _ := walkJSON(body, func(s string) (any, error) {
+		return self.resolveBindingFromString(s), nil
+	})
+
+	return processedBody.(map[string]any)
 }
 
 // resolveBindingFromString takes a string and replaces any injectable bindings built-in or defined

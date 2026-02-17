@@ -43,7 +43,9 @@ Veriflow is a simple yet powerful CLI tool for defining and running end-to-end A
                     },
                     "assert": {
                         "status": 201,
-                        "all": [{ "jsonpath": "$.data.username", "exists": true }]
+                        "all": [
+                            { "jsonpath": "$.data.username", "exists": true }
+                        ]
                     },
                     "exports": { "username": "$.data.username" } // Export variable for next requests
                 },
@@ -59,9 +61,14 @@ Veriflow is a simple yet powerful CLI tool for defining and running end-to-end A
                     },
                     "assert": {
                         "status": 200,
-                        "all": [{ "jsonpath": "$.data.email", "contains": "{{RUN_ID}}" }]
+                        "all": [
+                            {
+                                "jsonpath": "$.data.email",
+                                "contains": "{{RUN_ID}}"
+                            }
+                        ]
                     }
-                },
+                }
                 // ...
             ]
         }
@@ -260,6 +267,7 @@ The configuration file (`veriflow.json`) has the following structure:
 | `equals`   | string  | No       | Assert the value equals this string                    |
 | `isNot`    | string  | No       | Assert the value does NOT equal this string            |
 | `contains` | string  | No       | Assert the value contains this substring               |
+| `length`   | integer | No       | Assert the array length equals this number             |
 
 \*Either `jsonpath` or `xpath` is required. The appropriate one is used based on the response Content-Type.
 
@@ -458,7 +466,8 @@ veriflow step add register \
   --status 201 \
   --assert "exists $.data.id" \
   --assert "equals $.data.email test@example.com" \
-  --assert "isNot $.data.stats PENDING" \
+  --assert "isNot $.data.status PENDING" \
+  --assert "length $.data.roles 2" \
   --export "user_id $.data.id" \
   --non-interactive
 
@@ -508,6 +517,7 @@ exists <path>
 equals <path> <value>
 isNot  <path> <value>
 contains <path> <value>
+length <path> <value>
 ```
 
 Where `<path>` is either:
@@ -532,6 +542,7 @@ veriflow step add get-user \
   --status 200 \
   --assert "exists $.data.id" \
   --assert "equals $.data.name John" \
+  --assert "length $.data.tags 3" \
   --export "user_id $.data.id"
 
 # XML API
@@ -558,6 +569,8 @@ veriflow step add create-user \
 Bindings are template variables that get replaced at runtime. They can be used in request bodies, paths, and assertion values.
 
 Bindings can be referenced and used from a different flow but they have to be defined first.
+
+There is a validation pass before running that checks for any use-before-definition bindings references to minimize human errors.
 
 #### Built-in Bindings
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -75,6 +76,10 @@ Assertions syntax (JSON with JSONPath or XML with XPath):
   isNot <path> <value>
   	Example: --assert "isNot $.status PENDING"
   	Example: --assert "isNot /response/status PENDING"
+
+  length <path> <value>
+   	Example: --assert "length $.activeUsers 3"
+   	Example: --assert "length /response/activeUsers 3"
 
 Exports syntax (JSONPath for JSON, XPath for XML):
   <varname> <path>
@@ -634,10 +639,9 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 //	equals   <jsonpath|xpath> <value>
 //	contains <jsonpath|xpath> <value>
 //	isNot    <jsonpath|xpath> <value>
+//	length   <jsonpath|xpath> <value>
 //
 // Supports both JSONPath ($.path) and XPath (/path)
-//
-// @AI
 func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, error) {
 	// Patterns (case-insensitive). Uses RE2 via Go's regexp package.
 	var (
@@ -648,7 +652,7 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 		//  - 'single quoted'
 		//  - or unquoted (read until end, then trim whitespace)
 		reWithVal = regexp.MustCompile(
-			`(?i)^\s*(equals|contains|isNot)\s+([\$/][^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
+			`(?i)^\s*(equals|contains|isNot|length)\s+([\$/][^\s]+)\s+(?:(?:"([^"]*)")|(?:'([^']*)')|(.+))\s*$`,
 		)
 	)
 
@@ -676,11 +680,12 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			assertion.Contains = None[string]()
 			assertion.Equals = None[string]()
 			assertion.IsNot = None[string]()
+			assertion.Len = None[int]()
 			asserts = append(asserts, &assertion)
 			continue
 		}
 
-		// equals / contains / isNot
+		// equals / contains / isNot / length
 		if m := reWithVal.FindStringSubmatch(s); m != nil {
 			kind := m[1]
 			path := m[2]
@@ -713,8 +718,18 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 				assertion.IsNot = Some(val)
 				assertion.Equals = None[string]()
 				assertion.Contains = None[string]()
+			case "length":
+				length, err := strconv.Atoi(val)
+				if err != nil {
+					return nil, fmt.Errorf("assertion #%d: invalid length value %q: %w", i+1, val, err)
+				}
+
+				assertion.IsNot = None[string]()
+				assertion.Equals = None[string]()
+				assertion.Contains = None[string]()
+				assertion.Len = Some(length)
 			default:
-				// Should never happen due to regex, but keep a guard.
+				// Should never happen due to regex
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)
 			}
 
@@ -723,7 +738,7 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 		}
 
 		return nil, fmt.Errorf(
-			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <path>\n  - equals <path> <value>\n  - contains <path> <value>\n  - isNot <path> <value>\nWhere <path> is JSONPath ($.path) or XPath (/path)",
+			"invalid assertion syntax at #%d: %q\n. Expected one of:\n  - exists <path>\n  - equals <path> <value>\n  - contains <path> <value>\n  - isNot <path> <value>\n - length <path> <value>\nWhere <path> is JSONPath ($.path) or XPath (/path)",
 			i+1, raw,
 		)
 	}

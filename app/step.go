@@ -26,12 +26,12 @@ type StepOptions struct {
 }
 
 type Request struct {
-	Method         string                    `json:"method"`
-	Path           string                    `json:"path"`
-	Json           Option[map[string]any]    `json:"json"`
-	Xml            Option[string]            `json:"xml"`
+	Method string                 `json:"method"`
+	Path   string                 `json:"path"`
+	Json   Option[map[string]any] `json:"json"`
+	Xml    Option[string]         `json:"xml"`
 	// Files stores the files to upload to the server by fieldName -> relativePath (relative to config file)
-	Files          Option[map[string]string] `json:"files"`
+	Files Option[map[string]string] `json:"files"`
 	// Headers stores custom HTTP headers to send with the request (headerName -> value)
 	Headers        Option[map[string]string] `json:"headers"`
 	DisableHeaders bool                      `json:"disableHeaders"`
@@ -70,6 +70,7 @@ type Assertion struct {
 	Contains Option[string] `json:"contains"`
 	Equals   Option[string] `json:"equals"`
 	IsNot    Option[string] `json:"isNot"`
+	Len      Option[int]    `json:"length"`
 }
 
 type Exports = map[string]string // var_name->jsonpath

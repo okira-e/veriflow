@@ -121,19 +121,3 @@ func (self *AppError) RootCause() error {
 		current = unwrapped
 	}
 }
-
-// func IsRetryable(err error) bool {
-// 	// Our codes
-// 	var ae *AppError
-// 	if errors.As(err, &ae) {
-// 		if ae.Code == RateLimited || ae.Code == Unavailable {
-// 			return true
-// 		}
-// 	}
-// 	// stdlib signals
-// 	var ne net.Error
-// 	if errors.As(err, &ne) && (ne.Timeout() || ne.Temporary()) {
-// 		return true
-// 	}
-// 	return errors.Is(err, context.DeadlineExceeded)
-// }

@@ -35,7 +35,6 @@ func NewDefaultConfig(baseUrl string) (Cfg, error) {
 		return Cfg{}, oops.Err(oops.Internal, "Failed to get current working directory", err)
 	}
 
-	defaultConfig.Version = "1.0.0"
 	defaultConfig.ProjectName = filepath.Base(cwd)
 
 	defaultConfig.BaseUrl = baseUrl
@@ -131,4 +130,10 @@ func (self *Cfg) GetConfigDir() string {
 		return ""
 	}
 	return filepath.Dir(self.configFilePath)
+}
+
+// SetConfigFilePath sets the absolute path to the config file.
+// Used primarily in tests to enable file upload functionality.
+func (self *Cfg) SetConfigFilePath(path string) { // nocheckin: I don't think this is needed
+	self.configFilePath = path
 }

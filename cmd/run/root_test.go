@@ -55,7 +55,7 @@ func TestShowServerResponses(t *testing.T) {
 	cliopts.Silent = true
 
 	// With flag enabled
-	opts := RunOptions{
+	opts := RunCmdOptions{
 		TrimErrorResponse:   true,
 		KeepGoing:           false,
 		ShowServerResponses: true,
@@ -108,7 +108,7 @@ func TestSkipFlag_SingleStep(t *testing.T) {
 	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
-	opts := RunOptions{Printer: logging.NullPrinter{}}
+	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
 	failures, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {
@@ -151,7 +151,7 @@ func TestSkipFlag_EntireFlow(t *testing.T) {
 	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
-	opts := RunOptions{Printer: logging.NullPrinter{}}
+	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
 	failures, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {
@@ -204,7 +204,7 @@ func TestKeepGoingFlag_StopsOnFirstFailure(t *testing.T) {
 	stepsToRun := cli.FlattenTargets(targets, nil)
 
 	cliopts.Silent = true
-	opts := RunOptions{
+	opts := RunCmdOptions{
 		KeepGoing: false,
 		Printer:   logging.NullPrinter{},
 	}
@@ -249,7 +249,7 @@ func TestKeepGoingFlag_ContinuesOnFailure(t *testing.T) {
 	stepsToRun := cli.FlattenTargets(targets, nil)
 
 	cliopts.Silent = true
-	opts := RunOptions{
+	opts := RunCmdOptions{
 		KeepGoing: true,
 		Printer:   logging.NullPrinter{},
 	}
@@ -302,7 +302,7 @@ func TestSkipFlag_MultipleSkips(t *testing.T) {
 	stepsToRun := cli.FlattenTargets(targets, skips)
 
 	cliopts.Silent = true
-	opts := RunOptions{Printer: logging.NullPrinter{}}
+	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
 	failures, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {

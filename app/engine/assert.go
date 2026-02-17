@@ -75,6 +75,7 @@ func validateXMLAssertion(assertion *app.Assertion, body []byte) error {
 		path = assertion.JsonPath // fallback if user provided jsonpath for xml
 	}
 
+	// For other assertions, get a single node
 	node := xmlquery.FindOne(doc, path)
 	var value any
 	var lookupErr error
@@ -131,6 +132,20 @@ func validateAssertionValue(path string, value any, lookupErr error, assertion *
 		if !strings.Contains(actual, expectedSubstring) {
 			message := fmt.Sprintf("%s '%s' expected to contain '%s' but got '%s'", pathType, path, expectedSubstring, actual)
 			return oops.Err(oops.StepRequestResponseValueMismatch, message, nil)
+		}
+	}
+
+	if assertion.Len.IsSome() {
+		expectedLen := assertion.Len.Unwrap()
+		iterableVal, ok := value.([]any)
+		if !ok {
+			message := fmt.Sprintf("%s '%s' type mismatch. Expected an array with length: %d but got '%T'", pathType, path, expectedLen, value)
+			return oops.Err(oops.StepRequestResponseValueNotIterable, message, nil)
+		}
+
+		if len(iterableVal) != expectedLen {
+			message := fmt.Sprintf("%s '%s' expected to be of length: '%d' but got '%d'", pathType, path, expectedLen, len(iterableVal))
+			return oops.Err(oops.StepRequestResponseValueLengthMismatch, message, nil)
 		}
 	}
 

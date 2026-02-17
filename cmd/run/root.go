@@ -21,8 +21,8 @@ import (
 
 const maxResponseLines = 15
 
-// RunOptions holds all runtime configuration for executing targets.
-type RunOptions struct {
+// RunCmdOptions holds all runtime configuration for executing targets.
+type RunCmdOptions struct {
 	TrimErrorResponse   bool
 	KeepGoing           bool
 	ShowServerResponses bool
@@ -106,6 +106,17 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 
 	stepsToRun := cli.FlattenTargets(targets, skips)
 
+	runner := engine.NewRunner(engine.RunnerSettings{
+		Cfg:             cfg,
+		BaseUrlOverride: flags.BaseUrlOverride,
+	})
+
+	// Validate before running anything
+	err = runner.ValidateConfig()
+	if err != nil {
+		return false, oops.Err(oops.ConfigInvalid, "Config validation failed: "+err.Error(), nil)
+	}
+
 	// Run hooks
 	if !flags.SkipHooks {
 		if len(cfg.BeforeRun) > 0 {
@@ -119,22 +130,17 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 	}
 
 	// Execute
-	runner := engine.NewRunner(engine.RunnerSettings{
-		Cfg:             cfg,
-		BaseUrlOverride: flags.BaseUrlOverride,
-	})
-
-	opts := RunOptions{
+	runCmdOptions := RunCmdOptions{
 		TrimErrorResponse:   !flags.ShowFullErrorResponse,
 		KeepGoing:           flags.KeepGoing,
 		ShowServerResponses: flags.ShowServerResponses,
 		Printer:             makePrinter(),
 	}
 
-	opts.Printer.Println(logging.Info, fmt.Sprintf("Run ID: %s", runner.RunId))
+	runCmdOptions.Printer.Println(logging.Info, fmt.Sprintf("Run ID: %s", runner.RunId))
 
 	start := time.Now()
-	failures, err := executeSteps(runner, stepsToRun, opts)
+	failures, err := executeSteps(runner, stepsToRun, runCmdOptions)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -184,7 +190,7 @@ func stepKey(flowName string, stepName string) string {
 }
 
 // executeSteps runs all steps, knows to print them, and returns the failure count.
-func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunOptions) (int, error) {
+func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunCmdOptions) (int, error) {
 	failures := 0
 
 	for _, target := range steps {
