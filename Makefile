@@ -16,6 +16,7 @@ build:
 	go build -o bin/debug/$(APP) .
 
 release:
+	mkdir -p bin/release
 	@test -n "$$(git tag --points-at HEAD)" || (echo "ERROR: release must be from a git tag" && exit 1)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 \
 	go build -trimpath -ldflags "$(LDFLAGS)" \

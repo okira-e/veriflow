@@ -992,77 +992,6 @@ func TestRunner_XMLAssertionFailure(t *testing.T) {
 	}
 }
 
-// nocheckin: here
-
-func TestRunner_FileUpload(t *testing.T) {
-	var receivedContentType string
-	var receivedFiles map[string]string // fieldName -> filename
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedContentType = r.Header.Get("Content-Type")
-		receivedFiles = make(map[string]string)
-
-		// Parse multipart form
-		err := r.ParseMultipartForm(10 << 20) // 10MB max
-		if err != nil {
-			t.Errorf("failed to parse multipart form: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// Collect uploaded files
-		for fieldName := range r.MultipartForm.File {
-			files := r.MultipartForm.File[fieldName]
-			if len(files) > 0 {
-				receivedFiles[fieldName] = files[0].Filename
-			}
-		}
-
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"uploaded": true, "count": len(receivedFiles)})
-	}))
-	defer server.Close()
-
-	// nocheckin: Make sure this does what it says it does
-
-	// Create a temporary test file
-	tmpDir := t.TempDir()
-	testFilePath := filepath.Join(tmpDir, "test.txt")
-	err := os.WriteFile(testFilePath, []byte("test content"), 0644)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	// Create config with the temp dir as config directory
-	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.SetConfigFilePath(filepath.Join(tmpDir, "veriflow.json"))
-
-	runner := NewRunner(RunnerSettings{Cfg: cfg})
-
-	step := app.NewStep("upload",
-		app.Request{
-			Method: "POST",
-			Path:   "/upload",
-			Files:  Some(map[string]string{"document": "test.txt"}),
-		},
-		app.NewAssert(200, None[[]*app.Assertion]()),
-		app.Exports{},
-	)
-
-	_, err = runner.Execute(step)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if !strings.HasPrefix(receivedContentType, "multipart/form-data") {
-		t.Errorf("expected multipart/form-data content type, got %s", receivedContentType)
-	}
-
-	if receivedFiles["document"] != "test.txt" {
-		t.Errorf("expected file named 'test.txt', got %v", receivedFiles["document"])
-	}
-}
-
 func TestRunner_CustomHeaders(t *testing.T) {
 	var receivedHeaders http.Header
 
@@ -1394,7 +1323,7 @@ func TestRunner_MultipleFileUpload(t *testing.T) {
 	os.WriteFile(file2, []byte("content2"), 0644)
 
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.SetConfigFilePath(filepath.Join(tmpDir, "veriflow.json"))
+	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
 
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
@@ -1429,7 +1358,7 @@ func TestRunner_FileUploadNonExistent(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.SetConfigFilePath(filepath.Join(tmpDir, "veriflow.json"))
+	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
 
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 

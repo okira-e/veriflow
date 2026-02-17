@@ -19,7 +19,7 @@ type Cfg struct {
 	Flows          []*app.Flow `json:"flows"`
 	AfterRun       []string    `json:"afterRun"`
 	flowsIdx       map[string]int
-	configFilePath string // absolute path to the config file (for resolving relative file paths)
+	ConfigFilePath string // absolute path to the config file (for resolving relative file paths)
 }
 
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
@@ -126,14 +126,8 @@ func (self *Cfg) buildFlowsIndex() {
 // GetConfigDir returns the directory containing the config file.
 // Used for resolving relative file paths in file uploads.
 func (self *Cfg) GetConfigDir() string {
-	if self.configFilePath == "" {
+	if self.ConfigFilePath == "" {
 		return ""
 	}
-	return filepath.Dir(self.configFilePath)
-}
-
-// SetConfigFilePath sets the absolute path to the config file.
-// Used primarily in tests to enable file upload functionality.
-func (self *Cfg) SetConfigFilePath(path string) { // nocheckin: I don't think this is needed
-	self.configFilePath = path
+	return filepath.Dir(self.ConfigFilePath)
 }

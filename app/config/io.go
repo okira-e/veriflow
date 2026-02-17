@@ -27,7 +27,7 @@ func LoadConfig(path string) (*Cfg, error) {
 	if err != nil {
 		return nil, oops.Err(oops.Internal, "Failed to get absolute path to config file", err)
 	}
-	cfg.configFilePath = absPath
+	cfg.ConfigFilePath = absPath
 
 	cfg.buildFlowsIndex()
 
