@@ -25,14 +25,14 @@ func makeTestFlow(name string, steps ...*app.Step) *app.Flow {
 
 func makeTestStep(name, path string) *app.Step {
 	return app.NewStep(name,
-		app.NewRequest("GET", path, nil),
+		app.Request{Method: "GET", Path: path},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{})
 }
 
 func makeFailingStep(name, path string) *app.Step {
 	return app.NewStep(name,
-		app.NewRequest("GET", path, nil),
+		app.Request{Method: "GET", Path: path},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{JsonPath: "$.value", Equals: Some("WRONG")},
 		})),

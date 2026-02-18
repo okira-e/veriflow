@@ -550,13 +550,13 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 	// Make sure only one body type is sent
 	bodyCount := 0
 	if flags.Json != "" {
-		bodyCount++
+		bodyCount += 1
 	}
 	if flags.Xml != "" {
-		bodyCount++
+		bodyCount += 1
 	}
 	if len(flags.Files) > 0 {
-		bodyCount++
+		bodyCount += 1
 	}
 	if bodyCount > 1 {
 		return nil, oops.Err(oops.ErrInvalidInput, "--json, --xml, and --file flags are mutually exclusive", nil)
@@ -587,11 +587,16 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 		assert = app.NewAssert(flags.Status, None[[]*app.Assertion]())
 	}
 
-	request := app.NewRequest(flags.Method, flags.Path, parsedJson)
-	if flags.Xml != "" {
-		request.Xml = Some(flags.Xml)
+	request := app.Request{
+		Method: flags.Method,
+		Path:   flags.Path,
 	}
-	if len(flags.Files) > 0 {
+
+	if parsedJson != nil {
+		request.Json = Some[any](parsedJson)
+	} else if flags.Xml != "" {
+		request.Xml = Some(flags.Xml)
+	} else if len(flags.Files) > 0 {
 		// Parse files format "fieldName:path/to/file.pdf" into map
 		filesMap := make(map[string]string)
 		for _, fileSpec := range flags.Files {
@@ -608,6 +613,7 @@ func buildStepFromFlags(stepName string, flags *addCmdFlags) (*app.Step, error) 
 		}
 		request.Files = Some(filesMap)
 	}
+
 	if len(flags.Headers) > 0 {
 		// Parse headers format "Header-Name:value" into map
 		headersMap := make(map[string]string)

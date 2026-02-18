@@ -177,7 +177,7 @@ func TestCfgUpdateFlow(t *testing.T) {
 		// Create updated flow with same name but different steps
 		updatedFlow := app.NewFlow("test-flow")
 		step := app.NewStep("new-step",
-			app.NewRequest("POST", "/test", nil),
+			app.Request{Method: "POST", Path: "/test"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		)
@@ -247,12 +247,12 @@ func TestCfgGetTotalSteps(t *testing.T) {
 	t.Run("calculate total steps across flows", func(t *testing.T) {
 		flow1 := app.NewFlow("flow-1")
 		step1 := app.NewStep("step1",
-			app.NewRequest("GET", "/test", nil),
+			app.Request{Method: "GET", Path: "/test"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		)
 		step2 := app.NewStep("step2",
-			app.NewRequest("POST", "/test", nil),
+			app.Request{Method: "POST", Path: "/test"},
 			app.NewAssert(201, None[[]*app.Assertion]()),
 			app.Exports{},
 		)
@@ -261,7 +261,7 @@ func TestCfgGetTotalSteps(t *testing.T) {
 
 		flow2 := app.NewFlow("flow-2")
 		step3 := app.NewStep("step3",
-			app.NewRequest("GET", "/other", nil),
+			app.Request{Method: "GET", Path: "/other"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		)

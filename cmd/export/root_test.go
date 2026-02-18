@@ -39,7 +39,7 @@ func TestConvertStepToCurl(t *testing.T) {
 				Request: app.Request{
 					Method: "POST",
 					Path:   "/users",
-					Json: Some(map[string]any{
+					Json: Some[any](map[string]any{
 						"name": "alice",
 						"age":  30,
 					}),
@@ -79,7 +79,7 @@ func TestConvertStepToCurl(t *testing.T) {
 				Request: app.Request{
 					Method:         "POST",
 					Path:           "/raw",
-					Json:           Some(map[string]any{"x": "y"}),
+					Json:           Some[any](map[string]any{"x": "y"}),
 					DisableHeaders: true,
 				},
 			},
@@ -193,7 +193,7 @@ func TestConvertStepToCurl(t *testing.T) {
 				Request: app.Request{
 					Method: "POST",
 					Path:   "/api",
-					Json:   Some(map[string]any{"data": "test"}),
+					Json:   Some[any](map[string]any{"data": "test"}),
 					Headers: Some(map[string]string{
 						"Authorization": "Bearer token",
 						"X-API-Key":     "secret",
@@ -217,7 +217,7 @@ func TestConvertStepToCurl(t *testing.T) {
 				Request: app.Request{
 					Method:  "POST",
 					Path:    "/custom",
-					Json:    Some(map[string]any{"data": "test"}),
+					Json:    Some[any](map[string]any{"data": "test"}),
 					Headers: Some(map[string]string{"Content-Type": "text/plain"}),
 				},
 			},

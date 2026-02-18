@@ -43,36 +43,36 @@ func TestIntegration_DeepExportChain(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	steps := []*app.Step{
-		app.NewStep("step1", app.NewRequest("GET", "/step1", nil),
+		app.NewStep("step1", app.Request{Method: "GET", Path: "/step1"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"id": "$.id", "token": "$.token"}),
 
-		app.NewStep("step2", app.NewRequest("POST", "/step2", map[string]any{
+		app.NewStep("step2", app.Request{Method: "POST", Path: "/step2", Json: Some[any](map[string]any{
 			"id": "{{bind:id}}", "token": "{{bind:token}}",
-		}),
+		})},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"session": "$.session", "ref": "$.ref"}),
 
-		app.NewStep("step3", app.NewRequest("POST", "/step3", map[string]any{
+		app.NewStep("step3", app.Request{Method: "POST", Path: "/step3", Json: Some[any](map[string]any{
 			"id": "{{bind:id}}", "session": "{{bind:session}}",
-		}),
+		})},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"order_id": "$.order_id"}),
 
-		app.NewStep("step4", app.NewRequest("POST", "/step4", map[string]any{
+		app.NewStep("step4", app.Request{Method: "POST", Path: "/step4", Json: Some[any](map[string]any{
 			"order_id": "{{bind:order_id}}", "ref": "{{bind:ref}}",
-		}),
+		})},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"payment_id": "$.payment_id"}),
 
 		// Final step uses exports from steps 1, 2, 3, and 4
-		app.NewStep("step5", app.NewRequest("POST", "/step5", map[string]any{
+		app.NewStep("step5", app.Request{Method: "POST", Path: "/step5", Json: Some[any](map[string]any{
 			"id":         "{{bind:id}}",
 			"token":      "{{bind:token}}",
 			"session":    "{{bind:session}}",
 			"order_id":   "{{bind:order_id}}",
 			"payment_id": "{{bind:payment_id}}",
-		}),
+		})},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.confirmed", Equals: Some("true")},
 			})),
@@ -180,45 +180,45 @@ func TestIntegration_CompleteUserJourney(t *testing.T) {
 	flow := []*app.Step{
 		// 1. Register
 		app.NewStep("register",
-			app.NewRequest("POST", "/register", map[string]any{
+			app.Request{Method: "POST", Path: "/register", Json: Some[any](map[string]any{
 				"email": "test-{{RUN_ID}}@example.com", "password": "secret",
-			}),
+			})},
 			app.NewAssert(201, Some([]*app.Assertion{{JsonPath: "$.user_id", Exists: Some(true)}})),
 			app.Exports{"user_id": "$.user_id"}),
 
 		// 2. Login (sets cookie)
 		app.NewStep("login",
-			app.NewRequest("POST", "/login", map[string]any{
+			app.Request{Method: "POST", Path: "/login", Json: Some[any](map[string]any{
 				"email": "test-{{RUN_ID}}@example.com", "password": "secret",
-			}),
+			})},
 			app.NewAssert(200, Some([]*app.Assertion{{JsonPath: "$.token", Exists: Some(true)}})),
 			app.Exports{"token": "$.token"}),
 
 		// 3. Create resource (uses cookie from login)
 		app.NewStep("create-resource",
-			app.NewRequest("POST", "/resources", map[string]any{
+			app.Request{Method: "POST", Path: "/resources", Json: Some[any](map[string]any{
 				"name": "Resource-{{RUN_ID}}", "owner": "{{bind:user_id}}",
-			}),
+			})},
 			app.NewAssert(201, None[[]*app.Assertion]()),
 			app.Exports{"resource_id": "$.resource_id"}),
 
 		// 4. Update resource (dynamic path + export)
 		app.NewStep("update-resource",
-			app.NewRequest("PUT", "/resources/{{bind:resource_id}}", map[string]any{
+			app.Request{Method: "PUT", Path: "/resources/{{bind:resource_id}}", Json: Some[any](map[string]any{
 				"name": "Updated-{{RUN_ID}}",
-			}),
+			})},
 			app.NewAssert(200, Some([]*app.Assertion{{JsonPath: "$.name", Contains: Some("Updated")}})),
 			app.Exports{}),
 
 		// 5. Delete resource
 		app.NewStep("delete-resource",
-			app.NewRequest("DELETE", "/resources/{{bind:resource_id}}", nil),
+			app.Request{Method: "DELETE", Path: "/resources/{{bind:resource_id}}"},
 			app.NewAssert(204, None[[]*app.Assertion]()),
 			app.Exports{}),
 
 		// 6. Verify deleted (should 404)
 		app.NewStep("verify-deleted",
-			app.NewRequest("GET", "/resources/{{bind:resource_id}}", nil),
+			app.Request{Method: "GET", Path: "/resources/{{bind:resource_id}}"},
 			app.NewAssert(404, None[[]*app.Assertion]()),
 			app.Exports{}),
 	}
@@ -242,17 +242,21 @@ func TestIntegration_AssertionFailureMidFlow(t *testing.T) {
 			stepsHit[1] = true
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]any{"value": "A"})
+
 		case "/step2":
 			stepsHit[2] = true
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]any{"value": "B"})
+
 		case "/step3":
 			stepsHit[3] = true
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]any{"status": "error", "code": 500}) // Will fail assertion
+
 		case "/step4":
 			stepsHit[4] = true
 			w.WriteHeader(http.StatusOK)
+
 		case "/step5":
 			stepsHit[5] = true
 			w.WriteHeader(http.StatusOK)
@@ -264,26 +268,26 @@ func TestIntegration_AssertionFailureMidFlow(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	steps := []*app.Step{
-		app.NewStep("step1", app.NewRequest("GET", "/step1", nil),
+		app.NewStep("step1", app.Request{Method: "GET", Path: "/step1"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"val_a": "$.value"}),
 
-		app.NewStep("step2", app.NewRequest("GET", "/step2", nil),
+		app.NewStep("step2", app.Request{Method: "GET", Path: "/step2"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{"val_b": "$.value"}),
 
 		// This step will fail - expects status="success" but gets "error"
-		app.NewStep("step3-fails", app.NewRequest("GET", "/step3", nil),
+		app.NewStep("step3-fails", app.Request{Method: "GET", Path: "/step3"},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.status", Equals: Some("success")}, // WILL FAIL
 			})),
 			app.Exports{}),
 
-		app.NewStep("step4", app.NewRequest("GET", "/step4", nil),
+		app.NewStep("step4", app.Request{Method: "GET", Path: "/step4"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{}),
 
-		app.NewStep("step5", app.NewRequest("GET", "/step5", nil),
+		app.NewStep("step5", app.Request{Method: "GET", Path: "/step5"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{}),
 	}
@@ -341,11 +345,11 @@ func TestIntegration_ExportFailureMidFlow(t *testing.T) {
 	cfg := &config.Cfg{BaseUrl: server.URL}
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
-	step1 := app.NewStep("step1", app.NewRequest("GET", "/step1", nil),
+	step1 := app.NewStep("step1", app.Request{Method: "GET", Path: "/step1"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"valid_data": "$.valid"})
 
-	step2 := app.NewStep("step2-bad-export", app.NewRequest("GET", "/step2", nil),
+	step2 := app.NewStep("step2-bad-export", app.Request{Method: "GET", Path: "/step2"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"missing": "$.expected.deeply.nested.path"}) // Will fail
 
@@ -412,17 +416,17 @@ func TestIntegration_CookiePersistenceAcrossEndpoints(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	steps := []*app.Step{
-		app.NewStep("get-auth", app.NewRequest("GET", "/auth", nil),
+		app.NewStep("get-auth", app.Request{Method: "GET", Path: "/auth"},
 			app.NewAssert(200, None[[]*app.Assertion]()), app.Exports{}),
 
-		app.NewStep("get-prefs", app.NewRequest("GET", "/preferences", nil),
+		app.NewStep("get-prefs", app.Request{Method: "GET", Path: "/preferences"},
 			app.NewAssert(200, None[[]*app.Assertion]()), app.Exports{}),
 
-		app.NewStep("get-tracking", app.NewRequest("GET", "/tracking", nil),
+		app.NewStep("get-tracking", app.Request{Method: "GET", Path: "/tracking"},
 			app.NewAssert(200, None[[]*app.Assertion]()), app.Exports{}),
 
 		// This requires all 3 cookies from previous steps
-		app.NewStep("dashboard", app.NewRequest("GET", "/dashboard", nil),
+		app.NewStep("dashboard", app.Request{Method: "GET", Path: "/dashboard"},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.auth", Equals: Some("auth-token")},
 				{JsonPath: "$.prefs", Equals: Some("dark-mode")},
@@ -490,7 +494,7 @@ func TestIntegration_ComplexNestedDataFlow(t *testing.T) {
 
 	steps := []*app.Step{
 		// Export from deeply nested paths
-		app.NewStep("get-config", app.NewRequest("GET", "/config", nil),
+		app.NewStep("get-config", app.Request{Method: "GET", Path: "/config"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{
 				"api_key":     "$.system.api.key",
@@ -500,7 +504,7 @@ func TestIntegration_ComplexNestedDataFlow(t *testing.T) {
 			}),
 
 		// Use exports in nested request body
-		app.NewStep("execute", app.NewRequest("POST", "/execute", map[string]any{
+		app.NewStep("execute", app.Request{Method: "POST", Path: "/execute", Json: Some[any](map[string]any{
 			"config": map[string]any{
 				"api_key":     "{{bind:api_key}}",
 				"api_version": "{{bind:api_version}}",
@@ -509,14 +513,14 @@ func TestIntegration_ComplexNestedDataFlow(t *testing.T) {
 			"options": map[string]any{
 				"rate_limit": "{{bind:rate_limit}}",
 			},
-		}),
+		})},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.result.processed_by", Equals: Some("{{bind:tenant_id}}")},
 			})),
 			app.Exports{}),
 
 		// Final verification using binding in assertion
-		app.NewStep("verify", app.NewRequest("GET", "/verify", nil),
+		app.NewStep("verify", app.Request{Method: "GET", Path: "/verify"},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.tenant_id", Equals: Some("{{bind:tenant_id}}")},
 				{JsonPath: "$.status", Equals: Some("verified")},
@@ -584,17 +588,17 @@ func TestIntegration_PaginationPattern(t *testing.T) {
 	runner := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 
 	// Page 1 (no cursor)
-	page1 := app.NewStep("page1", app.NewRequest("GET", "/items", nil),
+	page1 := app.NewStep("page1", app.Request{Method: "GET", Path: "/items"},
 		app.NewAssert(200, Some([]*app.Assertion{{JsonPath: "$.next_cursor", Exists: Some(true)}})),
 		app.Exports{"cursor": "$.next_cursor"})
 
 	// Page 2 (use cursor from page 1)
-	page2 := app.NewStep("page2", app.NewRequest("GET", "/items?cursor={{bind:cursor}}", nil),
+	page2 := app.NewStep("page2", app.Request{Method: "GET", Path: "/items?cursor={{bind:cursor}}"},
 		app.NewAssert(200, Some([]*app.Assertion{{JsonPath: "$.next_cursor", Exists: Some(true)}})),
 		app.Exports{"cursor": "$.next_cursor"}) // Overwrite cursor
 
 	// Page 3 (use cursor from page 2)
-	page3 := app.NewStep("page3", app.NewRequest("GET", "/items?cursor={{bind:cursor}}", nil),
+	page3 := app.NewStep("page3", app.Request{Method: "GET", Path: "/items?cursor={{bind:cursor}}"},
 		app.NewAssert(200, Some([]*app.Assertion{{JsonPath: "$.next_cursor", Exists: Some(false)}})), // No more pages
 		app.Exports{})
 
@@ -630,7 +634,7 @@ func TestIntegration_LongFlowStability(t *testing.T) {
 		exportKey := fmt.Sprintf("val%d", i)
 		step := app.NewStep(
 			fmt.Sprintf("step%d", i),
-			app.NewRequest("GET", fmt.Sprintf("/step%d", i), nil),
+			app.Request{Method: "GET", Path: fmt.Sprintf("/step%d", i)},
 			app.NewAssert(200, Some([]*app.Assertion{
 				{JsonPath: "$.value", Exists: Some(true)},
 			})),
@@ -648,10 +652,10 @@ func TestIntegration_LongFlowStability(t *testing.T) {
 
 	// Verify final step can still use first step's export
 	finalStep := app.NewStep("final",
-		app.NewRequest("POST", "/final", map[string]any{
+		app.Request{Method: "POST", Path: "/final", Json: Some[any](map[string]any{
 			"first": "{{bind:val1}}",
 			"last":  fmt.Sprintf("{{bind:val%d}}", numSteps),
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{})
 

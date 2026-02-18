@@ -125,7 +125,7 @@ func TestStepAddCmd(t *testing.T) {
 			t.Error("expected JSON to be set")
 		}
 
-		jsonData := step.Request.Json.Unwrap()
+		jsonData := step.Request.Json.Unwrap().(map[string]any)
 		if jsonData["name"] != "John" {
 			t.Errorf("expected name John, got %v", jsonData["name"])
 		}

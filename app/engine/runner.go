@@ -228,7 +228,7 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 	// Validate assertion
 
 	responseContentType := resp.Header.Get("Content-Type")
-	err = validateAssertClause(&step.Assert, resp.StatusCode, responseBodyInBytes, responseContentType)
+	err = assertStepResponse(&step.Assert, resp.StatusCode, responseBodyInBytes, responseContentType)
 	if err != nil {
 		return []byte{}, &AssertionFailure{
 			Err:      oops.Err(oops.StepRequestAssertionFailed, "step request assertion failed", err),
@@ -300,12 +300,12 @@ func (self *Runner) processBindingsForStep(step *app.Step) error {
 }
 
 // processRequestBody takes the request body and processes them by replacing any injectable variable (like {{RUN_ID}}) with its value.
-func (self *Runner) processRequestBody(body any) map[string]any {
+func (self *Runner) processRequestBody(body any) any {
 	processedBody, _ := walkJSON(body, func(s string) (any, error) {
 		return self.resolveBindingFromString(s), nil
 	})
 
-	return processedBody.(map[string]any)
+	return processedBody
 }
 
 // resolveBindingFromString takes a string and replaces any injectable bindings built-in or defined

@@ -101,7 +101,7 @@ func TestRunner_ConfigValidation(t *testing.T) {
 						Request: app.Request{
 							Method: "GET",
 							Path:   "{{bind:undefined_in_path}}",
-							Json: Some(map[string]any{
+							Json: Some[any](map[string]any{
 								"id": "{{bind:undefined_id}}@example.com",
 							}),
 						},
@@ -127,7 +127,7 @@ func TestRunner_ConfigValidation(t *testing.T) {
 						Name: "undefined-binding",
 						Request: app.Request{
 							Method: "GET",
-							Json: Some(map[string]any{
+							Json: Some[any](map[string]any{
 								"id": "{{bind:undefined_binding_in_json}}",
 							}),
 						},

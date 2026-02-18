@@ -16,7 +16,7 @@ import (
 	"github.com/oliveagle/jsonpath"
 )
 
-func validateAssertClause(assert *app.Assert, statusCode int, body []byte, contentType string) error {
+func assertStepResponse(assert *app.Assert, statusCode int, body []byte, contentType string) error {
 	// Validate status
 	err := validateStatus(assert, statusCode)
 	if err != nil {
@@ -55,13 +55,8 @@ func validateJSONAssertion(assertion *app.Assertion, body []byte) error {
 		return oops.Err(oops.StepRequestResponseParsingFailure, "failed to parse JSON response for step", err)
 	}
 
-	path := assertion.JsonPath
-	if path == "" {
-		path = assertion.XPath // fallback if user provided xpath for json
-	}
-
-	value, err := jsonpath.JsonPathLookup(response, path) // err means it wasn't found
-	return validateAssertionValue(path, value, err, assertion, "jsonpath")
+	value, err := jsonpath.JsonPathLookup(response, assertion.JsonPath) // err means it wasn't found
+	return validateAssertionValue(assertion.JsonPath, value, err, assertion, "jsonpath")
 }
 
 func validateXMLAssertion(assertion *app.Assertion, body []byte) error {

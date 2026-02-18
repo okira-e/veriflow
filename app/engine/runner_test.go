@@ -82,8 +82,57 @@ func TestRunner_BasicExecution(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("test-step",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if !requestReceived {
+		t.Error("expected request to be received by server")
+	}
+
+	if runner.StepsRan() != 1 {
+		t.Errorf("expected 1 step ran, got %d", runner.StepsRan())
+	}
+}
+
+func TestRunner_BasicExecutionWithPayload(t *testing.T) {
+	requestReceived := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestReceived = true
+		if r.Method != "POST" || r.URL.Path != "/users" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+
+		var data map[string]any
+		mustDecodeJSON(t, r, &data)
+
+		if data["name"] != "Alice" || data["password"] != "secret" {
+			t.Errorf("unexpected request body: %v", data)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	cfg := &config.Cfg{
+		BaseUrl: server.URL,
+		Flows:   []*app.Flow{},
+	}
+
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("add-user-test",
+		app.Request{Method: "POST", Path: "/users", Json: Some[any](map[string]any{
+			"name":     "Alice",
+			"password": "secret",
+		})},
+		app.NewAssert(201, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
 
@@ -124,7 +173,7 @@ func TestRunner_BaseUrlOverride(t *testing.T) {
 	})
 
 	step := app.NewStep("test",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -172,14 +221,14 @@ func TestRunner_BuiltInBindings(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("test",
-		app.NewRequest("POST", "/test", map[string]any{
+		app.Request{Method: "POST", Path: "/test", Json: Some[any](map[string]any{
 			"email": "test-{{RUN_ID}}@example.com",
 			"nested": []any{
 				map[string]string{
 					"key": "value-{{RUN_ID}}",
 				},
 			},
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -227,9 +276,9 @@ func TestRunner_ExportsAndBindings(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("register",
-		app.NewRequest("POST", "/register", map[string]any{
+		app.Request{Method: "POST", Path: "/register", Json: Some[any](map[string]any{
 			"email": "test@example.com",
-		}),
+		})},
 		app.NewAssert(201, None[[]*app.Assertion]()),
 		app.Exports{
 			"user_token": "$.token",
@@ -237,9 +286,9 @@ func TestRunner_ExportsAndBindings(t *testing.T) {
 	))
 
 	rt.MustExec(app.NewStep("get-profile",
-		app.NewRequest("POST", "/profile", map[string]any{
+		app.Request{Method: "POST", Path: "/profile", Json: Some[any](map[string]any{
 			"token": "{{bind:user_token}}",
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -267,13 +316,13 @@ func TestRunner_DynamicPathBinding(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("register",
-		app.NewRequest("POST", "/users/register", nil),
+		app.Request{Method: "POST", Path: "/users/register"},
 		app.NewAssert(201, None[[]*app.Assertion]()),
 		app.Exports{"user_id": "$.user_id"},
 	))
 
 	rt.MustExec(app.NewStep("get-user",
-		app.NewRequest("GET", "/users/{{bind:user_id}}", nil),
+		app.Request{Method: "GET", Path: "/users/{{bind:user_id}}"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -305,7 +354,7 @@ func TestRunner_NestedExports(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("test",
-		app.NewRequest("GET", "/data", nil),
+		app.Request{Method: "GET", Path: "/data"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{
 			"profile_id": "$.data.user.profile.id",
@@ -313,9 +362,9 @@ func TestRunner_NestedExports(t *testing.T) {
 	))
 
 	rt.MustExec(app.NewStep("verify-export",
-		app.NewRequest("POST", "/verify", map[string]any{
+		app.Request{Method: "POST", Path: "/verify", Json: Some[any](map[string]any{
 			"id": "{{bind:profile_id}}",
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -331,7 +380,7 @@ func TestRunner_AssertionFailure(t *testing.T) {
 	defer rt.Close()
 
 	step := app.NewStep("test",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{
 				JsonPath: "$.status",
@@ -373,7 +422,7 @@ func TestRunner_StatusCodeMismatch(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("test",
-		app.NewRequest("GET", "/missing", nil),
+		app.Request{Method: "GET", Path: "/missing"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -400,7 +449,7 @@ func TestRunner_Timeout(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("test",
-		app.NewRequest("GET", "/slow", nil),
+		app.Request{Method: "GET", Path: "/slow"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -440,18 +489,18 @@ func TestRunner_NestedBodyBinding(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("get-token",
-		app.NewRequest("GET", "/step1", nil),
+		app.Request{Method: "GET", Path: "/step1"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"auth_token": "$.token"},
 	))
 
 	rt.MustExec(app.NewStep("use-token",
-		app.NewRequest("POST", "/step2", map[string]any{
+		app.Request{Method: "POST", Path: "/step2", Json: Some[any](map[string]any{
 			"auth": map[string]any{
 				"token": "{{bind:auth_token}}",
 				"type":  "bearer",
 			},
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -487,7 +536,7 @@ func TestRunner_ChainedBindingsInSameString(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("export-values",
-		app.NewRequest("GET", "/step1", nil),
+		app.Request{Method: "GET", Path: "/step1"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{
 			"a": "$.a",
@@ -496,9 +545,9 @@ func TestRunner_ChainedBindingsInSameString(t *testing.T) {
 	))
 
 	rt.MustExec(app.NewStep("use-chained",
-		app.NewRequest("POST", "/step2", map[string]any{
+		app.Request{Method: "POST", Path: "/step2", Json: Some[any](map[string]any{
 			"value": "{{bind:a}}-{{bind:b}}-{{RUN_ID}}",
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -537,18 +586,18 @@ func TestRunner_ArrayBinding(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("get-id",
-		app.NewRequest("GET", "/step1", nil),
+		app.Request{Method: "GET", Path: "/step1"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"item_id": "$.id"},
 	))
 
 	rt.MustExec(app.NewStep("use-id",
-		app.NewRequest("POST", "/step2", map[string]any{
+		app.Request{Method: "POST", Path: "/step2", Json: Some[any](map[string]any{
 			"items": []any{
 				"{{bind:item_id}}",
 				"static-item",
 			},
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -586,13 +635,13 @@ func TestRunner_BindingInAssertion(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("get-expected",
-		app.NewRequest("GET", "/step1", nil),
+		app.Request{Method: "GET", Path: "/step1"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"expected": "$.expected_value"},
 	))
 
 	rt.MustExec(app.NewStep("verify",
-		app.NewRequest("GET", "/step2", nil),
+		app.Request{Method: "GET", Path: "/step2"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{
 				JsonPath: "$.actual_value",
@@ -621,7 +670,7 @@ func TestRunner_MultipleHTTPMethods(t *testing.T) {
 	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
 	for _, method := range methods {
 		step := app.NewStep(fmt.Sprintf("test-%s", method),
-			app.NewRequest(method, "/test", nil),
+			app.Request{Method: method, Path: "/test"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		)
@@ -655,7 +704,7 @@ func TestRunner_StepsRanCounter(t *testing.T) {
 
 	for i := 1; i <= 5; i += 1 {
 		step := app.NewStep(fmt.Sprintf("step%d", i),
-			app.NewRequest("GET", "/test", nil),
+			app.Request{Method: "GET", Path: "/test"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		)
@@ -680,7 +729,7 @@ func TestRunner_EmptyResponseBody(t *testing.T) {
 
 	t.Run("DELETE with 204 No Content", func(t *testing.T) {
 		rt.MustExec(app.NewStep("test",
-			app.NewRequest("DELETE", "/resource", nil),
+			app.Request{Method: "DELETE", Path: "/resource"},
 			app.NewAssert(204, None[[]*app.Assertion]()),
 			app.Exports{},
 		))
@@ -688,7 +737,7 @@ func TestRunner_EmptyResponseBody(t *testing.T) {
 
 	t.Run("Unexpected empty body with 200 OK", func(t *testing.T) {
 		step := app.NewStep("test",
-			app.NewRequest("GET", "/resource", nil),
+			app.Request{Method: "GET", Path: "/resource"},
 			app.NewAssert(
 				200,
 				Some([]*app.Assertion{
@@ -722,7 +771,7 @@ func TestRunner_ExportFailure(t *testing.T) {
 	defer rt.Close()
 
 	step := app.NewStep("test",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{
 			"missing_field": "$.nonexistent.path",
@@ -752,9 +801,9 @@ func TestRunner_UnresolvedBinding(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("test",
-		app.NewRequest("POST", "/test", map[string]any{
+		app.Request{Method: "POST", Path: "/test", Json: Some[any](map[string]any{
 			"value": "{{bind:nonexistent}}",
-		}),
+		})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	))
@@ -779,7 +828,7 @@ func TestRunner_RunIdConsistency(t *testing.T) {
 
 	for i := 0; i < 3; i += 1 {
 		rt.MustExec(app.NewStep(fmt.Sprintf("step%d", i),
-			app.NewRequest("GET", "/test", nil),
+			app.Request{Method: "GET", Path: "/test"},
 			app.NewAssert(200, None[[]*app.Assertion]()),
 			app.Exports{},
 		))
@@ -838,7 +887,7 @@ func TestRunner_XMLResponseWithXPathAssertion(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("xml-assertion",
-		app.NewRequest("GET", "/user", nil),
+		app.Request{Method: "GET", Path: "/user"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{XPath: "/user/id", Equals: Some("123")},
 			{XPath: "/user/name", Contains: Some("John")},
@@ -859,7 +908,7 @@ func TestRunner_XMLResponseExists(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("xml-exists",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{XPath: "/response/data/token", Exists: Some(true)},
 			{XPath: "/response/missing", Exists: Some(false)},
@@ -879,7 +928,7 @@ func TestRunner_XMLExports(t *testing.T) {
 	defer rt.Close()
 
 	step := app.NewStep("xml-export",
-		app.NewRequest("GET", "/user", nil),
+		app.Request{Method: "GET", Path: "/user"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{
 			"user_id": "/user/id",
@@ -953,9 +1002,9 @@ func TestRunner_MixedJSONRequestXMLResponse(t *testing.T) {
 	defer rt.Close()
 
 	rt.MustExec(app.NewStep("mixed",
-		app.NewRequest("POST", "/convert", map[string]any{
+		app.Request{Method: "POST", Path: "/convert", Json: Some[any](map[string]any{
 			"input": "data",
-		}),
+		})},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{XPath: "/response/converted", Equals: Some("true")},
 		})),
@@ -974,7 +1023,7 @@ func TestRunner_XMLAssertionFailure(t *testing.T) {
 	defer rt.Close()
 
 	step := app.NewStep("xml-fail",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{XPath: "/response/status", Equals: Some("success")},
 		})),
@@ -1009,7 +1058,7 @@ func TestRunner_CustomHeaders(t *testing.T) {
 		app.Request{
 			Method: "POST",
 			Path:   "/api/test",
-			Json:   Some(map[string]any{"data": "value"}),
+			Json:   Some[any](map[string]any{"data": "value"}),
 			Headers: Some(map[string]string{
 				"X-Custom-Header": "custom-value",
 				"Authorization":   "Bearer token123",
@@ -1057,7 +1106,7 @@ func TestRunner_CustomHeadersWithBinding(t *testing.T) {
 
 	// Step 1: Get token
 	step1 := app.NewStep("login",
-		app.NewRequest("POST", "/login", map[string]any{"username": "user"}),
+		app.Request{Method: "POST", Path: "/login", Json: Some[any](map[string]any{"username": "user"})},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"auth_token": "$.token"},
 	)
@@ -1109,7 +1158,7 @@ func TestRunner_DisableHeaders(t *testing.T) {
 
 	// Set a cookie
 	step1 := app.NewStep("set-cookie",
-		app.NewRequest("GET", "/set-cookie", nil),
+		app.Request{Method: "GET", Path: "/set-cookie"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -1153,7 +1202,7 @@ func TestRunner_QueryParameters(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("query-params",
-		app.NewRequest("GET", "/api/items?page=2&limit=50&sort=name", nil),
+		app.Request{Method: "GET", Path: "/api/items?page=2&limit=50&sort=name"},
 		app.NewAssert(200, Some([]*app.Assertion{
 			{JsonPath: "$.page", Equals: Some("2")},
 			{JsonPath: "$.limit", Equals: Some("50")},
@@ -1195,7 +1244,7 @@ func TestRunner_QueryParametersWithBinding(t *testing.T) {
 
 	// Get page number from config
 	step1 := app.NewStep("get-config",
-		app.NewRequest("GET", "/config", nil),
+		app.Request{Method: "GET", Path: "/config"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{"page_num": "$.default_page"},
 	)
@@ -1203,7 +1252,7 @@ func TestRunner_QueryParametersWithBinding(t *testing.T) {
 
 	// Use it in query params
 	step2 := app.NewStep("get-items",
-		app.NewRequest("GET", "/items?page={{bind:page_num}}&limit=10", nil),
+		app.Request{Method: "GET", Path: "/items?page={{bind:page_num}}&limit=10"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -1230,7 +1279,7 @@ func TestRunner_HTMLResponse(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("html-response",
-		app.NewRequest("GET", "/page", nil),
+		app.Request{Method: "GET", Path: "/page"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -1257,7 +1306,7 @@ func TestRunner_PlainTextResponse(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("text-response",
-		app.NewRequest("GET", "/text", nil),
+		app.Request{Method: "GET", Path: "/text"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)
@@ -1278,7 +1327,7 @@ func TestRunner_NetworkConnectionRefused(t *testing.T) {
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
 	step := app.NewStep("connection-refused",
-		app.NewRequest("GET", "/test", nil),
+		app.Request{Method: "GET", Path: "/test"},
 		app.NewAssert(200, None[[]*app.Assertion]()),
 		app.Exports{},
 	)

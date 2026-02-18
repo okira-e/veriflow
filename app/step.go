@@ -30,29 +30,15 @@ type StepOptions struct {
 }
 
 type Request struct {
-	Method string                 `json:"method"`
-	Path   string                 `json:"path"`
-	Json   Option[map[string]any] `json:"json"`
-	Xml    Option[string]         `json:"xml"`
+	Method string         `json:"method"`
+	Path   string         `json:"path"`
+	Json   Option[any]    `json:"json"`
+	Xml    Option[string] `json:"xml"`
 	// Files stores the files to upload to the server by fieldName -> relativePath (relative to config file)
 	Files Option[map[string]string] `json:"files"`
 	// Headers stores custom HTTP headers to send with the request (headerName -> value)
 	Headers        Option[map[string]string] `json:"headers"`
 	DisableHeaders bool                      `json:"disableHeaders"`
-}
-
-func NewRequest(method string, path string, json map[string]any) Request {
-	optionalJson := None[map[string]any]()
-	if json != nil {
-		optionalJson = Some(json)
-	}
-
-	return Request{
-		Method:         method,
-		Path:           path,
-		Json:           optionalJson,
-		DisableHeaders: false, // By default we implicitly set and include headers
-	}
 }
 
 type Assert struct {
