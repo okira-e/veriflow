@@ -695,7 +695,7 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 			continue
 		}
 
-		// equals / contains / isNot / length
+		// contains / isNot / length
 		if m := reWithVal.FindStringSubmatch(s); m != nil {
 			kind := m[1]
 			path := m[2]
@@ -720,14 +720,17 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 				assertion.Equals = Some(val)
 				assertion.Contains = None[string]()
 				assertion.IsNot = None[string]()
+
 			case "contains":
 				assertion.Contains = Some(val)
 				assertion.Equals = None[string]()
 				assertion.IsNot = None[string]()
+
 			case "isNot":
 				assertion.IsNot = Some(val)
 				assertion.Equals = None[string]()
 				assertion.Contains = None[string]()
+
 			case "length":
 				length, err := strconv.Atoi(val)
 				if err != nil {

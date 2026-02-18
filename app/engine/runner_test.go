@@ -1399,6 +1399,65 @@ func TestRunner_MultipleFileUpload(t *testing.T) {
 	}
 }
 
+func TestRunner_FileUpload(t *testing.T) {
+	var receivedFileName string
+	var receivedFileContent string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		file, header, err := r.FormFile("document")
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		receivedFileName = header.Filename
+		content, _ := io.ReadAll(file)
+		receivedFileContent = string(content)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{"uploaded": true})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "upload.txt")
+	os.WriteFile(filePath, []byte("hello from upload"), 0644)
+
+	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
+	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
+
+	runner := NewRunner(RunnerSettings{Cfg: cfg})
+
+	step := app.NewStep("upload-single",
+		app.Request{
+			Method: "POST",
+			Path:   "/upload",
+			Files:  Some(map[string]string{"document": "upload.txt"}),
+		},
+		app.NewAssert(200, None[[]*app.Assertion]()),
+		app.Exports{},
+	)
+
+	_, err := runner.Execute(step)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if receivedFileName != "upload.txt" {
+		t.Errorf("expected filename 'upload.txt', got '%s'", receivedFileName)
+	}
+
+	if receivedFileContent != "hello from upload" {
+		t.Errorf("expected content 'hello from upload', got '%s'", receivedFileContent)
+	}
+}
+
 func TestRunner_FileUploadNonExistent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
