@@ -413,6 +413,14 @@ veriflow export user-onboarding/upload-avatar
 # Output: curl -X 'POST' 'https://api.example.com/users/avatar' -F 'avatar=@test-files/avatar.jpg'
 ```
 
+#### veriflow tui
+
+Launch an interactive terminal UI for browsing flows, steps, and their details.
+
+```bash
+veriflow tui
+```
+
 #### veriflow flow add
 
 Add a new flow to the configuration.

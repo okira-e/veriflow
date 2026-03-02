@@ -7,10 +7,6 @@ import (
 func (model Model) View() string {
 	const statuslineHeight int = 1
 
-	if len(model.cfg.Flows) == 0 {
-		return "no flows mate"
-	}
-
 	flowsExplorerUI := drawFlowsExplorer(
 		model.flowsExplorerModel,
 		model.layout.FlowsExplorer,

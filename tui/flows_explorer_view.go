@@ -21,6 +21,13 @@ func drawFlowsExplorer(model FlowsExplorerModel, rect Rect, focused bool) string
 		Background(titleBackgroundColor).
 		Render(centerIt(title, rect.W))
 
+	content := ""
+	if len(model.List.Items()) == 0 {
+		content = "\n" + centerIt("No flows defined", rect.W)
+	} else {
+		content = model.List.View()
+	}
+
 	return lipgloss.
 		NewStyle().
 		MarginTop(rect.Y).
@@ -28,7 +35,7 @@ func drawFlowsExplorer(model FlowsExplorerModel, rect Rect, focused bool) string
 			lipgloss.JoinVertical(
 				lipgloss.Left,
 				titleUI,
-				model.List.View(),
+				content,
 			),
 		)
 }
