@@ -72,4 +72,5 @@ type StepsExplorerModel struct {
 
 type StepViewModel struct {
 	selectedStep Option[*app.Step]
+	scrollOffset int
 }

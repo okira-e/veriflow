@@ -16,6 +16,7 @@ import (
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
+	tuicmd "github.com/okira-e/veriflow/cmd/tui"
 	"github.com/okira-e/veriflow/tui"
 	"github.com/spf13/cobra"
 )
@@ -68,6 +69,7 @@ func Execute() {
 	run.SetupRunCommands(rootCmd)
 
 	export.SetupExportCommands(rootCmd)
+	tuicmd.SetupTuiCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		if errors.Is(err, &run.RunAssertionError{}) { // An assertion failure happened from the server not a veriflow error.

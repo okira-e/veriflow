@@ -24,7 +24,6 @@ func drawFlowsExplorer(model FlowsExplorerModel, rect Rect, focused bool) string
 	return lipgloss.
 		NewStyle().
 		MarginTop(rect.Y).
-		// Border(lipgloss.RoundedBorder()).
 		Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
