@@ -741,6 +741,7 @@ func BuildAssertObjectFromExpressions(assertExpr []string) ([]*app.Assertion, er
 				assertion.Equals = None[string]()
 				assertion.Contains = None[string]()
 				assertion.Len = Some(length)
+
 			default:
 				// Should never happen due to regex
 				return nil, fmt.Errorf("assertion #%d: unsupported type %q", i+1, kind)

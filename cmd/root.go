@@ -6,14 +6,18 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/okira-e/veriflow/app/cli"
 	"github.com/okira-e/veriflow/app/cliopts"
+	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/cmd/export"
 	"github.com/okira-e/veriflow/cmd/flow"
 	"github.com/okira-e/veriflow/cmd/run"
 	"github.com/okira-e/veriflow/cmd/step"
+	tuicmd "github.com/okira-e/veriflow/cmd/tui"
+	"github.com/okira-e/veriflow/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +32,13 @@ It uses a JSON configuration file (veriflow.json) to define flows, steps,
 assertions, and exports. Tests run in order, passing data between steps.`,
 	TraverseChildren: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		cfg, err := config.LoadConfig(cliopts.ConfigFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config at path \"%s\": %s\n", cliopts.ConfigFile, err)
+			os.Exit(1)
+		}
+
+		tui.Run(cfg)
 	},
 }
 
@@ -59,6 +69,7 @@ func Execute() {
 	run.SetupRunCommands(rootCmd)
 
 	export.SetupExportCommands(rootCmd)
+	tuicmd.SetupTuiCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		if errors.Is(err, &run.RunAssertionError{}) { // An assertion failure happened from the server not a veriflow error.
