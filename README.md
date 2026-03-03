@@ -1,6 +1,6 @@
 # Veriflow
 
-Veriflow is a simple yet powerful CLI tool for defining and running end-to-end API test flows using a simple JSON configuration file.
+Veriflow is a simple yet powerful CLI tool for defining and running declarative and deterministic end-to-end API test flows using a simple JSON configuration file.
 
 ![promo](./assets/demo.png)
 
