@@ -18,6 +18,7 @@ const (
 	MissingRequiredFlag
 	AssertionExpressionParsingFailure
 	InvalidTarget
+	FailedToGetCurrentDir
 	// File operation errors
 	FileReadError
 	FileWriteError
@@ -103,6 +104,8 @@ func (code Code) String() string {
 		return PascalToScreamingSnake("AssertionExpressionParsingFailure")
 	case InvalidTarget:
 		return PascalToScreamingSnake("InvalidTarget")
+	case FailedToGetCurrentDir:
+		return PascalToScreamingSnake("FailedToGetCurrentDir")
 	case FileReadError:
 		return PascalToScreamingSnake("FileReadError")
 	case FileWriteError:

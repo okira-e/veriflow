@@ -144,21 +144,20 @@ func runCommand(flags *runFlags, args []string) (bool, error) {
 	runCmdOptions.Printer.Println(logging.Info, fmt.Sprintf("Run ID: %s", runner.RunId))
 
 	start := time.Now()
-	failures, err := executeSteps(runner, stepsToRun, runCmdOptions)
+	failureCount, af, err := executeSteps(runner, stepsToRun, runCmdOptions)
 	elapsed := time.Since(start)
-
 	if err != nil {
 		return false, err
 	}
 
 	// Report results
 	if cliopts.JSONOutput {
-		reportJSON(failures == 0, elapsed, runner.StepsRan(), runner.TotalSteps(), !flags.SkipHooks)
+		reportJSON(failureCount == 0, elapsed, runner.StepsRan(), runner.TotalSteps(), !flags.SkipHooks, af)
 	} else {
-		report(failures == 0, elapsed, runner.StepsRan(), runner.TotalSteps())
+		report(failureCount == 0, elapsed, runner.StepsRan(), runner.TotalSteps())
 	}
 
-	return failures > 0, nil
+	return failureCount > 0, nil
 }
 
 // parseSkips converts skip args into a set of cli.Target for fast lookup.
@@ -193,23 +192,24 @@ func stepKey(flowName string, stepName string) string {
 	return flowName + "/" + stepName
 }
 
-// executeSteps runs all steps, knows to print them, and returns the failure count.
-func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunCmdOptions) (int, error) {
+// executeSteps runs all steps, knows to print them, and returns the failure count
+// along with the last assertion failure (if any).
+func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunCmdOptions) (int, *engine.AssertionFailure, error) {
 	failures := 0
+	var lastFailure *engine.AssertionFailure
 
 	for _, target := range steps {
 		opts.Printer.Styled(logging.Info, logging.Grey, "Running ", false)
 		opts.Printer.Print(logging.Info, fmt.Sprintf("%s/%s...", target.Flow.Name, target.Step.Name))
 
 		resp, err := runner.Execute(target.Step)
-
 		if err != nil {
 			var af *engine.AssertionFailure
 			isAssertionFailure := errors.As(err, &af)
-
 			if isAssertionFailure {
 				failures += 1
 				af.Flow = target.Flow
+				lastFailure = af
 			}
 
 			opts.Printer.Styled(logging.Info, logging.Red, "FAILED", true)
@@ -217,9 +217,9 @@ func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunCmdOptions)
 			if !opts.KeepGoing {
 				if isAssertionFailure {
 					reportAssertionFailure(af, opts.TrimErrorResponse)
-					return failures, nil
+					return failures, lastFailure, nil
 				}
-				return failures, err
+				return failures, lastFailure, err
 			}
 		} else {
 			if opts.ShowServerResponses {
@@ -229,7 +229,7 @@ func executeSteps(runner *engine.Runner, steps []cli.Target, opts RunCmdOptions)
 		}
 	}
 
-	return failures, nil
+	return failures, lastFailure, nil
 }
 
 func runBeforeHooks(cfg *config.Cfg, showOutput bool) error {
@@ -287,15 +287,24 @@ func report(success bool, elapsed time.Duration, stepsRan int, totalSteps int) {
 	}
 }
 
-func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int, ranHooks bool) {
+func reportJSON(success bool, elapsed time.Duration, stepsRan int, totalSteps int, ranHooks bool, af *engine.AssertionFailure) {
 	printer := logging.NewJSONPrinter(cliopts.Silent)
-	printer.PrintStructured(map[string]any{
+	result := map[string]any{
 		"took":     utils.FormatDuration(elapsed),
 		"success":  success,
 		"ran":      stepsRan,
 		"ranHooks": ranHooks,
 		"total":    totalSteps,
-	})
+		"code":     "",
+		"message":  "",
+	}
+	if af != nil {
+		if appErr, ok := af.Err.RootCause().(*oops.AppError); ok {
+			result["code"] = appErr.Code.String()
+			result["message"] = appErr.Msg
+		}
+	}
+	printer.PrintStructured(result)
 }
 
 func reportAssertionFailure(af *engine.AssertionFailure, trimResponse bool) {

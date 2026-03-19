@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/oops"
@@ -25,13 +24,6 @@ func LoadConfig(path string) (*Cfg, error) {
 	if jsonErr != nil {
 		return nil, oops.Err(oops.ConfigUnmarshalError, "Failed to unmarshal config JSON", jsonErr)
 	}
-
-	// Store absolute path to config file for resolving relative file paths
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, oops.Err(oops.Internal, "Failed to get absolute path to config file", err)
-	}
-	cfg.ConfigFilePath = absPath
 
 	cfg.buildFlowsIndex()
 

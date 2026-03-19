@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/antchfx/xmlquery"
 	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	"github.com/okira-e/veriflow/app/oops"
 	. "github.com/okira-e/veriflow/app/opt"
@@ -118,57 +118,31 @@ func (self *Runner) Execute(step *app.Step) ([]byte, error) {
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 
-		configDir := self.settings.Cfg.GetConfigDir()
+		// Resolve config directory once for all files
+		configDir := cliopts.ConfigFile
 		if configDir == "" {
-			return []byte{}, oops.Err(oops.Internal, "config directory not available for resolving file paths", nil)
+			currentDir, err := os.Getwd()
+			if err != nil {
+				return []byte{}, oops.Err(oops.FailedToGetCurrentDir, "failed to retrieve the current directory path for file upload", err)
+			}
+			configDir = currentDir
+		} else {
+			configDir = filepath.Dir(configDir)
+		}
+
+		absConfigDir, err := filepath.Abs(configDir)
+		if err != nil {
+			return []byte{}, oops.Err(oops.Internal, "failed to resolve config directory", err)
 		}
 
 		for fieldName, relativePath := range files {
-			// Resolve relative path to absolute path
-			absolutePath := filepath.Join(configDir, relativePath)
-
-			// Check file size (100MB limit)
-			const maxFileSize = 100 * 1024 * 1024 // 100MB
-			fileInfo, err := os.Stat(absolutePath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return []byte{}, oops.Err(oops.FileNotFound, fmt.Sprintf("file not found: %s", relativePath), err)
-				}
-				return []byte{}, oops.Err(oops.FileReadError, fmt.Sprintf("failed to stat file: %s", relativePath), err)
-			}
-
-			if fileInfo.Size() > maxFileSize {
-				return []byte{}, oops.Err(oops.ErrInvalidInput, fmt.Sprintf("file too large: %s (%.2f MB, max 100MB)", relativePath, float64(fileInfo.Size())/(1024*1024)), nil)
-			}
-
-			// Open file
-			file, err := os.Open(absolutePath)
-			if err != nil {
-				return []byte{}, oops.Err(oops.FileReadError, fmt.Sprintf("failed to open file: %s", relativePath), err)
-			}
-			defer file.Close()
-
-			// Auto-detect MIME type from file extension (like curl does)
-			mimeType := mime.TypeByExtension(filepath.Ext(absolutePath))
-			if mimeType == "" {
-				mimeType = "application/octet-stream"
-			}
-
-			// Create form file
-			part, err := writer.CreateFormFile(fieldName, filepath.Base(absolutePath))
-			if err != nil {
-				return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to create multipart form file", err)
-			}
-
-			// Copy file content to part
-			_, err = io.Copy(part, file)
-			if err != nil {
-				return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to copy file content", err)
+			if err := self.attachFile(writer, absConfigDir, relativePath, fieldName); err != nil {
+				return []byte{}, err
 			}
 		}
 
 		// Close the writer to finalize the multipart message
-		err := writer.Close()
+		err = writer.Close()
 		if err != nil {
 			return []byte{}, oops.Err(oops.StepRequestBuildFailed, "failed to close multipart writer", err)
 		}
@@ -393,4 +367,49 @@ func (self *Runner) resolveBuiltinBinding(str string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// attachFile validates, reads, and writes a single file into the multipart writer.
+func (self *Runner) attachFile(writer *multipart.Writer, absConfigDir string, relativePath string, fieldName string) error {
+	absolutePath := filepath.Join(absConfigDir, relativePath)
+
+	// Prevent path traversal outside the config directory
+	absFilePath, err := filepath.Abs(absolutePath)
+	if err != nil {
+		return oops.Err(oops.Internal, "failed to resolve file path", err)
+	}
+	if !strings.HasPrefix(absFilePath, absConfigDir+string(filepath.Separator)) {
+		return oops.Err(oops.ErrInvalidInput, fmt.Sprintf("file path %q escapes the config directory", relativePath), nil)
+	}
+
+	// Check file size (100MB limit)
+	const maxFileSize = 100 * 1024 * 1024
+	fileInfo, err := os.Stat(absolutePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return oops.Err(oops.FileNotFound, fmt.Sprintf("file not found: %s", relativePath), err)
+		}
+		return oops.Err(oops.FileReadError, fmt.Sprintf("failed to stat file: %s", relativePath), err)
+	}
+	if fileInfo.Size() > maxFileSize {
+		return oops.Err(oops.ErrInvalidInput, fmt.Sprintf("file too large: %s (%.2f MB, max 100MB)", relativePath, float64(fileInfo.Size())/(1024*1024)), nil)
+	}
+
+	file, err := os.Open(absolutePath)
+	if err != nil {
+		return oops.Err(oops.FileReadError, fmt.Sprintf("failed to open file: %s", relativePath), err)
+	}
+	defer file.Close()
+
+	part, err := writer.CreateFormFile(fieldName, filepath.Base(absolutePath))
+	if err != nil {
+		return oops.Err(oops.StepRequestBuildFailed, "failed to create multipart form file", err)
+	}
+
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return oops.Err(oops.StepRequestBuildFailed, "failed to copy file content", err)
+	}
+
+	return nil
 }

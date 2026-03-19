@@ -656,6 +656,34 @@ To disable automatic cookie handling for a specific step, set `disableHeaders: t
 | 1        | One or more assertions failed  |
 | Non-zero | Configuration or runtime error |
 
+### JSON Output
+
+When using the `--json-output` flag, Veriflow outputs a single JSON object with the following structure:
+
+```json
+{
+    "took": "1.23s",
+    "success": true,
+    "ran": 5,
+    "ranHooks": true,
+    "total": 5,
+    "code": "",
+    "message": ""
+}
+```
+
+| Field      | Type    | Description                                           |
+| ---------- | ------- | ----------------------------------------------------- |
+| `took`     | string  | Human-readable elapsed time                           |
+| `success`  | boolean | Whether all tests passed                              |
+| `ran`      | integer | Number of steps executed                              |
+| `ranHooks` | boolean | Whether beforeRun/afterRun hooks were executed        |
+| `total`    | integer | Total number of steps in the configuration            |
+| `code`     | string  | Error code on assertion failure (empty on success)    |
+| `message`  | string  | Error message on assertion failure (empty on success) |
+
+The `code` field uses screaming snake case error codes (e.g., `STEP_REQUEST_STATUS_MISMATCH`). The full list of error codes is defined in [`app/oops/codes.go`](app/oops/codes.go) for anyone who wants to parse the output programmatically or build tooling on top of it.
+
 ## Contributing
 
 Feel free to suggest improvements, start a discussion, file an issue, or open a PR.

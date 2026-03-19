@@ -62,7 +62,7 @@ func TestShowServerResponses(t *testing.T) {
 		Printer:             logging.NullPrinter{},
 	}
 
-	failures, err := executeSteps(runner, []cli.Target{{Flow: flow, Step: step}}, opts)
+	failures, _, err := executeSteps(runner, []cli.Target{{Flow: flow, Step: step}}, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestShowServerResponses(t *testing.T) {
 	runner2 := engine.NewRunner(engine.RunnerSettings{Cfg: cfg})
 	opts.ShowServerResponses = false
 
-	failures2, err2 := executeSteps(runner2, []cli.Target{{Flow: flow, Step: step}}, opts)
+	failures2, _, err2 := executeSteps(runner2, []cli.Target{{Flow: flow, Step: step}}, opts)
 	if err2 != nil {
 		t.Fatalf("unexpected error: %v", err2)
 	}
@@ -110,7 +110,7 @@ func TestSkipFlag_SingleStep(t *testing.T) {
 	cliopts.Silent = true
 	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
-	failures, err := executeSteps(runner, stepsToRun, opts)
+	failures, _, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestSkipFlag_EntireFlow(t *testing.T) {
 	cliopts.Silent = true
 	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
-	failures, err := executeSteps(runner, stepsToRun, opts)
+	failures, _, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestKeepGoingFlag_StopsOnFirstFailure(t *testing.T) {
 		Printer:   logging.NullPrinter{},
 	}
 
-	failures, _ := executeSteps(runner, stepsToRun, opts)
+	failures, _, _ := executeSteps(runner, stepsToRun, opts)
 
 	if failures != 1 {
 		t.Errorf("expected 1 failure, got %d", failures)
@@ -254,7 +254,7 @@ func TestKeepGoingFlag_ContinuesOnFailure(t *testing.T) {
 		Printer:   logging.NullPrinter{},
 	}
 
-	failures, _ := executeSteps(runner, stepsToRun, opts)
+	failures, _, _ := executeSteps(runner, stepsToRun, opts)
 
 	if failures != 2 {
 		t.Errorf("expected 2 failures, got %d", failures)
@@ -304,7 +304,7 @@ func TestSkipFlag_MultipleSkips(t *testing.T) {
 	cliopts.Silent = true
 	opts := RunCmdOptions{Printer: logging.NullPrinter{}}
 
-	failures, err := executeSteps(runner, stepsToRun, opts)
+	failures, _, err := executeSteps(runner, stepsToRun, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -23,7 +23,6 @@ type Cfg struct {
 	Flows          []*app.Flow `json:"flows"`
 	AfterRun       []string    `json:"afterRun"`
 	flowsIdx       map[string]int
-	ConfigFilePath string // absolute path to the config file (for resolving relative file paths)
 }
 
 func NewDefaultConfig(baseUrl string) (Cfg, error) {
@@ -127,11 +126,3 @@ func (self *Cfg) buildFlowsIndex() {
 	}
 }
 
-// GetConfigDir returns the directory containing the config file.
-// Used for resolving relative file paths in file uploads.
-func (self *Cfg) GetConfigDir() string {
-	if self.ConfigFilePath == "" {
-		return ""
-	}
-	return filepath.Dir(self.ConfigFilePath)
-}

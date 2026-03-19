@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/okira-e/veriflow/app"
+	"github.com/okira-e/veriflow/app/cliopts"
 	"github.com/okira-e/veriflow/app/config"
 	. "github.com/okira-e/veriflow/app/opt"
 )
@@ -1372,7 +1373,11 @@ func TestRunner_MultipleFileUpload(t *testing.T) {
 	os.WriteFile(file2, []byte("content2"), 0644)
 
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
+
+	// Point ConfigFile to the temp directory so relative file paths resolve correctly
+	originalConfigFile := cliopts.ConfigFile
+	cliopts.ConfigFile = filepath.Join(tmpDir, "veriflow.json")
+	defer func() { cliopts.ConfigFile = originalConfigFile }()
 
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
@@ -1430,7 +1435,11 @@ func TestRunner_FileUpload(t *testing.T) {
 	os.WriteFile(filePath, []byte("hello from upload"), 0644)
 
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
+
+	// Point ConfigFile to the temp directory so relative file paths resolve correctly
+	originalConfigFile := cliopts.ConfigFile
+	cliopts.ConfigFile = filepath.Join(tmpDir, "veriflow.json")
+	defer func() { cliopts.ConfigFile = originalConfigFile }()
 
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
@@ -1464,9 +1473,7 @@ func TestRunner_FileUploadNonExistent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
 	cfg := &config.Cfg{BaseUrl: server.URL, Flows: []*app.Flow{}}
-	cfg.ConfigFilePath = filepath.Join(tmpDir, "veriflow.json")
 
 	runner := NewRunner(RunnerSettings{Cfg: cfg})
 
