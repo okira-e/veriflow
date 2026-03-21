@@ -690,4 +690,4 @@ Feel free to suggest improvements, start a discussion, file an issue, or open a 
 
 ## License
 
-This project is licensed under the MIT license - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
