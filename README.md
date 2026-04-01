@@ -417,6 +417,8 @@ veriflow export user-onboarding/upload-avatar
 
 Launch an interactive terminal UI for browsing flows, steps, and their details.
 
+![tui](./assets/tui_demo.png)
+
 ```bash
 veriflow tui
 ```
