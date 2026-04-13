@@ -69,7 +69,6 @@ Veriflow is a simple yet powerful CLI tool for defining and running declarative 
                         ]
                     }
                 }
-                // ...
             ]
         }
     }
@@ -80,6 +79,7 @@ Veriflow is a simple yet powerful CLI tool for defining and running declarative 
 
 Because it's the simplest form of targeted flow testing that:
 
+- Is built with CI/CD in mind
 - Treats your API as a black box
 - Runs ordered, stateful flows (auth -> action -> verify)
 - Passes data between steps (JWTs, IDs, etc.)
@@ -111,29 +111,15 @@ Example:
 - checkout
 - admin-create-user
 
-Flows are ordered. If a step fails, the flow stops.
+Flows are ordered. If a step fails, the flow stops (can be changed with the --keep-going flag is provided).
 
 #### Step
 
 A step is a single HTTP request with assertions.
 
-Each step defines:
-
-- HTTP method + path
-- Request body / headers / files
-- Assertions on the response
-- Optional exported values for the next steps
-
 #### Exports
 
-You can extract values from a response and reuse them later.
-
-Common use cases:
-
-- JWT tokens
-- User ID created in a test to be asserted in the following GET request
-
-Exports are resolved via JSONPath (for JSON responses) or XPath (for XML responses).
+You can extract values from a response and reuse them later as [Bindings](#bindings).
 
 #### Assertions
 
